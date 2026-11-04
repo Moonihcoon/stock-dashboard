@@ -37,14 +37,14 @@ for rise,val in itertools.product([70,80,90,100],[2000,3000,4000,5000]):
               run=dict(d0=int(dd[0]),d=np.diff(dd).tolist(),c=[int(c[0])]+np.diff(c).tolist(),o=(o-np.r_[c[0],c[:-1]]).tolist(),h=(h-c).tolist(),l=(c-l).tolist(),v=np.round(g.value.to_numpy()/1e7).astype(int).tolist()))
         fd=round(float(first.loc[i,'dd_peak'])*100,1) if i in first.index else None
         rows.append([key,fd,int(r.n_rebounds),int(r.repeats),f6,None if pd.isna(r.max_dd) else round(float(r.max_dd)*100,1)])
-        if int(r.n_rebounds)==0:   # 후보: 급등 조건만 충족, -30% 하락 후 +10% 반등 미발생
+        if True:   # 후보: 거래대금·상승률 조건만 충족한 모든 급등
             g=e['_g'];k=e['k'];pkv=float(e['peak'])
             end=(e['next_s0']-1) if e['next_s0'] is not None else len(g)-1
             lo=g['low'].to_numpy(float);cl=g['close'].to_numpy(float)
             low=float(lo[k+1:end+1].min()) if end>k else float(cl[k])
             ds=end-k
             st=1 if low<=pkv*0.7 else 0
-            cands.append([key,st,round((cl[end]/pkv-1)*100,1),round((low/pkv-1)*100,1),int(ds),int(cl[end]),di[np.datetime64(pd.Timestamp(g['date'].iloc[end]))],1 if (e['next_s0'] is None and ds<=126) else 0])
+            cands.append([key,st,round((cl[end]/pkv-1)*100,1),round((low/pkv-1)*100,1),int(ds),int(cl[end]),di[np.datetime64(pd.Timestamp(g['date'].iloc[end]))],1 if (e['next_s0'] is None and ds<=126) else 0,int(r.n_rebounds)])
     reach=[x for x in rows if x[4]>=0];norb=[x for x in rows if x[4]==1]
     fds=[x[1] for x in rows if x[1] is not None]
     brk_d=brk.depth_vs_ref.dropna()*100
