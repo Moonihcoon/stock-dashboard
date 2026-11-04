@@ -1,0 +1,30 @@
+; ================================================================
+;  급등주 대시보드 설정 파일
+;  이 파일은 저장소 바깥(예: C:\stock\dashboard_config.ini)에 있어야 합니다.
+;  키 값은 비밀번호와 같으니 GitHub에 올리거나 남에게 보내지 마세요.
+; ================================================================
+
+[kiwoom]
+; 키움 REST API App Key / Secret Key (openapi.kiwoom.com 에서 발급, 이 PC의 공인 IP 등록 필요)
+app_key =
+app_secret =
+
+[naver]
+; 네이버 개발자센터 Client ID / Secret (상승 이유 수집용, 비워 두면 건너뜀)
+client_id =
+client_secret =
+queries = 특징주
+days_keep = 90
+fetch_days = 3
+
+[paths]
+; 시세·분석 파일을 보관할 폴더 (GitHub에 올라가지 않음). 비워 두면 저장소 옆 work 폴더
+work =
+; 처음 한 번 가져올 기존 시세 파일 이름 (work 폴더에 넣어 두세요)
+base_file = panel_kiwoom_marketcap.parquet
+
+[options]
+; yes 면 끝에 GitHub로 자동 업로드
+push = yes
+; yes 면 급등 종목 1분봉도 받음
+minute = yes

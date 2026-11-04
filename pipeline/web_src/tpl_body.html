@@ -1,0 +1,76 @@
+<div class="wrap">
+<h1>급등주 대시보드</h1>
+<p class="sub">코스피·코스닥 일봉 (2020-01 ~ {{LAST}}). 상승 빨강, 하락 파랑. 통계는 일봉 기준이며(분봉은 급등 종목만 따로 수집 중), 상장폐지 종목은 포함되지 않았습니다.</p>
+<nav role="tablist">
+<button role="tab" data-tab="stats" aria-selected="true">통계 분석</button>
+<button role="tab" data-tab="list" aria-selected="false">종목 목록</button>
+<button role="tab" data-tab="stocks" aria-selected="false">종목 차트</button>
+<button role="tab" data-tab="screen" aria-selected="false">조건검색</button>
+<button role="tab" data-tab="calendar" aria-selected="false">당일 상승 200</button>
+<button role="tab" data-tab="reasons" aria-selected="false">상승 이유</button>
+</nav>
+
+<section id="p-stats"><!--STATS--></section>
+
+<section id="p-list" hidden>
+<div class="card"><h2>선정 종목 목록 (<span id="n-list0"></span>개)</h2>
+<p class="sub">5거래일 내 장중 +80% 이상, 그 5일 중 3일 이상 거래대금 3천억원 이상. 열 제목을 누르면 정렬, 검색창으로 종목명을 찾습니다. 시가총액은 상승 시작 직전 거래일 기준(억원)입니다.</p>
+<!--LIST--></div></section>
+
+<section id="p-stocks" hidden>
+<div class="card">
+<div class="ctl">
+<label><span>종목 선택 (<span id="n-list">0</span>개)</span><select id="sel" aria-label="종목 선택" style="min-width:240px"></select></label>
+<label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="lv"> 3분할 매수선 (고점 대비 −33/−38/−43%)</label>
+</div>
+<div class="chips" id="chips"></div>
+<div id="cb1"></div>
+<div class="leg"><span><i style="background:var(--up)"></i>상승(종가≥시가)</span><span><i style="background:var(--down)"></i>하락</span><span><i style="background:var(--mark)"></i>상승 시작 · 고점 · 매수선</span><span>아래 막대는 일별 거래대금(억원)</span></div>
+<div class="tw" id="tw1"></div>
+</div></section>
+
+<section id="p-screen" hidden>
+<div class="card">
+<div class="ctl">
+<label>일 거래대금 ≥ (5일 중 3일 이상)<select id="f-val"><option value="2000">2천억</option><option value="3000" selected>3천억</option><option value="4000">4천억</option><option value="5000">5천억</option></select></label>
+<label>5거래일 상승률 ≥ (장중 고가)<select id="f-rise"><option value="70">70%</option><option value="80" selected>80%</option><option value="90">90%</option><option value="100">100%</option></select></label>
+<label>상승 시작 연도<select id="f-year"><option value="">전체</option></select></label>
+<label>시장<select id="f-mk"><option value="">전체</option><option>KOSPI</option><option>KOSDAQ</option></select></label>
+</div>
+<p class="sub" id="sc-sum" style="margin-top:12px"></p>
+<div class="tw" style="max-height:340px" id="tw3"></div>
+<h3 id="sc-title" style="margin:16px 0 0;font-size:15px"></h3>
+<div id="cb3"></div>
+<div class="note">거래대금 4단계 × 상승률 4단계, 모두 16개 조합을 미리 계산해 두었습니다. "반등" 열은 고점에서 −30% 이상 하락한 뒤 +10% 반등한 첫 저점의 고점 대비 낙폭과, 6개월 안에 저점 이탈 후 다시 +10% 반등한 횟수입니다. 같은 급등이 이어지면 한 건으로 묶었습니다.</div>
+</div></section>
+
+<section id="p-calendar" hidden>
+<div class="card">
+<div class="ctl">
+<label>날짜<input type="date" id="dt" min="2020-01-02" max="{{LAST}}"></label>
+<button class="btn" id="prev">◀ 이전 거래일</button><button class="btn" id="next">다음 거래일 ▶</button><button class="btn" id="today">최근 거래일</button>
+<label>시장<select id="mk"><option value="">전체</option><option>KOSPI</option><option>KOSDAQ</option></select></label>
+<label>최소 거래대금(억)<input type="number" id="mv" value="0" min="0" step="10" style="width:110px"></label>
+<label>차트 기간<select id="cn"><option value="60">약 3개월</option><option value="120" selected>약 6개월</option><option value="250">약 1년</option></select></label>
+</div>
+<p class="sub" id="cal-sum" style="margin-top:12px"></p>
+<div id="t2c" hidden style="margin-top:10px"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><h3 id="t2-title" style="margin:6px 0 0;font-size:15px;flex:1;min-width:0"></h3><button class="btn" id="t2x" type="button">차트 닫기</button></div><div id="cb2"></div></div>
+<div class="tw" style="max-height:640px" id="tw2"></div>
+<div class="note">코스피·코스닥에서 ETF·ETN·우선주·스팩·리츠를 뺀 종목을 전일 종가 대비 당일 종가 상승률로 줄 세운 상위 200개입니다. 시가총액은 당일 종가 × 상장주식수(키움 종목정보 기준)이며 값이 없으면 –로 표시합니다. 상승 이유는 네이버 뉴스의 '특징주' 기사 제목에서 뽑은 것이라 실제 원인과 다를 수 있습니다. <b>차트 보기</b>를 누르면 선택일까지의 일봉(아래 막대는 거래대금, 억원)과 그 뒤 최대 20거래일이 나옵니다.</div>
+</div></section>
+
+<section id="p-reasons" hidden>
+<div class="card">
+<h2>당일 상승 종목의 이유</h2>
+<p class="sub">언론 기사 제목(특징주 기사)에서 종목명과 이유를 뽑아 모은 목록입니다. PC에서 매일 자동 수집한 <code>data/reasons.json</code>을 읽습니다. 기사 제목을 요약한 것이라 실제 상승 원인과 다를 수 있습니다.</p>
+<div class="ctl" style="margin-top:10px">
+<label>날짜<select id="rs-dt" aria-label="날짜 선택" style="min-width:150px"></select></label>
+<label>종목명 검색<input type="search" id="rs-q" placeholder="예: 삼성"></label>
+<label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="rs-up" checked> 상승 기사만</label>
+<label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="rs-top"> 상위 200에 든 종목만</label>
+</div>
+<p class="sub" id="rs-sum" style="margin-top:12px"></p>
+<div class="tw tall" id="tw5"></div>
+<div class="note">상승률은 그날 전일 대비 종가 기준 상위 200 목록과 이름이 일치할 때만 표시됩니다. 기사 제목에서 종목명을 찾는 방식이라 이름이 짧거나 흔한 종목은 잘못 붙을 수 있습니다. 기사 링크는 각 언론사 페이지로 연결됩니다.</div>
+</div></section>
+</div>
