@@ -209,7 +209,7 @@ async function tab5(){
 const ready={};
 async function open(name){
   document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===name));
-  ['stats','list','stocks','screen','calendar','reasons'].forEach(t=>$('#p-'+t).hidden=t!==name);
+  ['stats','list','stocks','screen','cand','calendar','reasons'].forEach(t=>$('#p-'+t).hidden=t!==name);
   try{
     if(name==='stocks'){await loadEp();
       if(!ready.s){ready.s=1;LIST=CMB['80|3000'].rows.map(r=>({...EPM[r[0]],s:r})).sort((a,b)=>a.name.localeCompare(b.name,'ko'));$('#n-list').textContent=LIST.length;
@@ -219,6 +219,7 @@ async function open(name){
       if(!ready.x){ready.x=1;const ys=[...new Set(Object.values(EPM).map(e=>D(e.start).slice(0,4)))].sort();$('#f-year').innerHTML='<option value="">전체</option>'+ys.map(y=>`<option>${y}</option>`).join('');
         ['f-rise','f-val','f-year','f-mk'].forEach(i=>$('#'+i).onchange=tab3);tab3()}
       else{const c=$('#cb3');if(c._redraw)c._redraw()}}
+    if(name==='cand'){await loadEp();if(!ready.cd){ready.cd=1;['c-val','c-rise','c-st','c-mk'].forEach(i=>$('#'+i).onchange=tab6)}tab6()}
     if(name==='reasons')await tab5();
     if(name==='calendar'){if(!ready.c){ready.c=1;await loadTick();$('#dt').value=DATES[DATES.length-1];
         $('#dt').onchange=tab2;$('#mk').onchange=tab2;$('#mv').oninput=tab2;$('#today').onclick=()=>{$('#dt').value=DATES[DATES.length-1];tab2()};$('#t2x').onclick=()=>{$('#t2c').hidden=true;document.querySelectorAll('#tw2 tr.sel').forEach(x=>x.classList.remove('sel'))};$('#cn').onchange=()=>{const s=document.querySelector('#tw2 tr.sel');if(s&&!$('#t2c').hidden)s.querySelector('button[data-c]').click()};
@@ -228,7 +229,7 @@ async function open(name){
   }catch(err){const p=$('#p-'+name);const m=document.createElement('p');m.className='note';m.textContent='데이터를 불러오지 못했습니다. 잠시 뒤 다시 열어 주세요.';p.prepend(m)}
 }
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{open(b.dataset.tab);try{history.replaceState(null,'','#'+b.dataset.tab)}catch(e){}});
-ld('data/dates.json').then(d=>{DATES=d;const h=location.hash.slice(1);open(['stats','list','stocks','screen','calendar','reasons'].includes(h)?h:'stats')}).catch(()=>{document.body.append('날짜 데이터를 불러오지 못했습니다.')});
+ld('data/dates.json').then(d=>{DATES=d;const h=location.hash.slice(1);open(['stats','list','stocks','screen','cand','calendar','reasons'].includes(h)?h:'stats')}).catch(()=>{document.body.append('날짜 데이터를 불러오지 못했습니다.')});
 
 /* ---------- 엑셀 다운로드 ---------- */
 let T2X=null,XLSXP=null;
@@ -253,3 +254,23 @@ document.addEventListener('click',async ev=>{const b=ev.target.closest('button[d
 /* ---------- 마지막 업데이트 시각 · 수동 업데이트 ---------- */
 fetch('data/updated.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(u=>{if(u)$('#upd-t').textContent='최종 업데이트 '+u.t+' (시세 '+u.d+')'}).catch(()=>{});
 $('#upd-btn').addEventListener('click',()=>{$('#upd-note').hidden=false});
+
+/* ---------- 탭: 후보종목 ---------- */
+let T6X=[];
+function tab6(){
+  const key=`${$('#c-rise').value}|${$('#c-val').value}`,C=CMB[key],live=$('#c-st').value==='live',mk=$('#c-mk').value;
+  const all=(C.cand||[]);
+  let list=all.map(c=>({e:EPM[c[0]],c})).filter(x=>x.e&&(!live||x.c[7]===1)&&(!mk||x.e.mkt===mk)).sort((a,b)=>b.e.start-a.e.start);
+  const stt=c=>(c[1]?'−30% 도달·반등 대기':'−30% 미도달')+(c[7]?' · 추적 중':' · 6개월 경과');
+  $('#c-sum').innerHTML=`조건: 5거래일 내 장중 +${$('#c-rise').value}% 이상, 3일 이상 거래대금 ${fmt($('#c-val').value)}억 이상. 전체 급등 ${C.sum.n}건 중 반등 미발생 <b>${all.length}건</b>, 그중 추적 중 <b>${all.filter(c=>c[7]===1).length}건</b>. 표시 ${list.length}건.`;
+  T6X=list.map(x=>{const e=x.e,c=x.c;return [e.name,e.code,MKT(e.mkt),D(e.start),e.rise,e.avgv,e.mcap,D(e.peakDate),e.peak,c[5],D(c[6]),c[2],c[3],c[4],stt(c)]});
+  $('#tw6').innerHTML=list.length?`<table><thead><tr><th class="l">종목명</th><th class="l">시장</th><th>상승 시작일</th><th>5일 상승률</th><th>일평균 거래대금(억)</th><th>시가총액(억)</th><th>고점일</th><th>고점</th><th>현재가</th><th>고점 대비 현재</th><th>고점 이후 최저</th><th>고점 후 경과</th><th class="l">상태</th></tr></thead><tbody>${list.map((x,i)=>{const e=x.e,c=x.c;return `<tr class="pick" data-i="${i}" tabindex="0"><td class="l">${esc(e.name)}</td><td class="l">${MKT(e.mkt)}</td><td>${D(e.start)}</td><td class="up">+${f1(e.rise)}%</td><td>${fmt(e.avgv)}</td><td>${fmt(e.mcap)}</td><td>${D(e.peakDate)}</td><td>${fmt(e.peak)}</td><td>${fmt(c[5])}<br><small class="mut">${D(c[6])}</small></td><td class="${c[2]<0?'dn':'up'}">${pctTxt(c[2])}</td><td class="dn">${pctTxt(c[3])}</td><td>${c[4]}일</td><td class="l">${stt(c)}</td></tr>`}).join('')}</tbody></table>`:`<p class="mut" style="padding:12px">${live?'지금 추적 중인 후보가 없습니다. 최근 6개월 안에 이 조건으로 급등한 뒤 아직 −30% 하락·10% 반등이 나오지 않은 종목이 없다는 뜻입니다. 범위를 "전체 기간"으로 바꾸거나 조건을 낮춰 보세요.':'조건에 맞는 종목이 없습니다.'}</p>`;
+  const show=i=>{const x=list[i];if(!x){$('#cb6').replaceChildren();$('#cb6')._shell=0;$('#c-title').textContent='';return}
+    const e=x.e;document.querySelectorAll('#tw6 tr.pick').forEach(r=>r.classList.toggle('sel',+r.dataset.i===i));
+    $('#c-title').textContent=`${e.name} (${MKT(e.mkt)}) 일봉 · 고점 ${fmt(e.peak)} · −30% 선 ${fmt(Math.round(e.peak*0.7))}`;
+    mountChart($('#cb6'),epRows(e.id),{key:'c6'+e.id,marks:[{di:e.start,t:'상승 시작'},{di:e.peakDate,t:'고점'}],ref:{p:e.peak,t:'고점 대비'},label:e.name+' 일봉'})};
+  document.querySelectorAll('#tw6 tr.pick').forEach(r=>{const go=()=>show(+r.dataset.i);r.onclick=go;r.onkeydown=ev=>{if(ev.key==='Enter')go()}});
+  show(0);
+}
+document.addEventListener('click',async ev=>{const b=ev.target.closest('button[data-x="cand"]');if(!b)return;
+  await saveXlsx([['종목명','종목코드','시장','상승 시작일','5일 상승률(%)','일평균 거래대금(억)','시가총액(억)','고점일','고점','현재가','기준일','고점 대비 현재(%)','고점 이후 최저(%)','고점 후 경과(거래일)','상태'],...T6X],'candidates_'+$('#c-rise').value+'_'+$('#c-val').value,'후보종목')});

@@ -23,7 +23,7 @@ for rise,val in itertools.product([70,80,90,100],[2000,3000,4000,5000]):
     p=P(rise=rise/100,val_thresh=val*EOK,val_days=3)
     eps=find_episodes(d,p);E,T=run_chain(eps,p)
     first=T[T.order==1].set_index('eid');brk=T[T.order>=2]
-    rows=[]
+    rows=[];cands=[]
     for i,e in enumerate(eps):
         r=E.iloc[i];key=f"{e['ticker']}_{pd.Timestamp(e['start_date']):%Y%m%d}"
         f6=item6(e,p)
@@ -37,10 +37,18 @@ for rise,val in itertools.product([70,80,90,100],[2000,3000,4000,5000]):
               run=dict(d0=int(dd[0]),d=np.diff(dd).tolist(),c=[int(c[0])]+np.diff(c).tolist(),o=(o-np.r_[c[0],c[:-1]]).tolist(),h=(h-c).tolist(),l=(c-l).tolist(),v=np.round(g.value.to_numpy()/1e7).astype(int).tolist()))
         fd=round(float(first.loc[i,'dd_peak'])*100,1) if i in first.index else None
         rows.append([key,fd,int(r.n_rebounds),int(r.repeats),f6,None if pd.isna(r.max_dd) else round(float(r.max_dd)*100,1)])
+        if int(r.n_rebounds)==0:   # 후보: 급등 조건만 충족, -30% 하락 후 +10% 반등 미발생
+            g=e['_g'];k=e['k'];pkv=float(e['peak'])
+            end=(e['next_s0']-1) if e['next_s0'] is not None else len(g)-1
+            lo=g['low'].to_numpy(float);cl=g['close'].to_numpy(float)
+            low=float(lo[k+1:end+1].min()) if end>k else float(cl[k])
+            ds=end-k
+            st=1 if low<=pkv*0.7 else 0
+            cands.append([key,st,round((cl[end]/pkv-1)*100,1),round((low/pkv-1)*100,1),int(ds),int(cl[end]),di[np.datetime64(pd.Timestamp(g['date'].iloc[end]))],1 if (e['next_s0'] is None and ds<=126) else 0])
     reach=[x for x in rows if x[4]>=0];norb=[x for x in rows if x[4]==1]
     fds=[x[1] for x in rows if x[1] is not None]
     brk_d=brk.depth_vs_ref.dropna()*100
-    COMBO[f"{rise}|{val}"]=dict(rows=rows,sum=dict(n=len(rows),tk=int(E.ticker.nunique()),c2=int(E.cond2.sum()),c3=int(E.cond3.sum()),
+    COMBO[f"{rise}|{val}"]=dict(rows=rows,cand=cands,sum=dict(n=len(rows),tk=int(E.ticker.nunique()),c2=int(E.cond2.sum()),c3=int(E.cond3.sum()),
         rep=round(float(E.repeats.mean()),2),first_med=round(float(np.median(fds)),1) if fds else None,brk_med=round(float(brk_d.median()),1) if len(brk_d) else None,
         reach50=len(reach),norb50=len(norb),norb_tk=int(len(set(r_[0].split('_')[0] for r_ in norb)))))
     print(rise,val,len(rows),COMBO[f"{rise}|{val}"]['sum'],flush=True)
