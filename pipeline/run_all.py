@@ -112,8 +112,8 @@ def main():
         import update_minute
         step('분봉', update_minute.main)
     publish()
-    import reasons_naver
-    step('상승 이유', reasons_naver.main)
+    import reasons_dart
+    step('상승 이유', reasons_dart.main)
     if '--no-push' not in args and opt('options', 'push', 'yes').lower() in ('yes', 'y', '1', 'true'):
         step('업로드', push)
     log('===== 작업 끝 =====')

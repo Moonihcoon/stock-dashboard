@@ -203,7 +203,7 @@ async function tab5(){
   list.sort((a,b)=>((rate[b.n]?rate[b.n].r:-1)-(rate[a.n]?rate[a.n].r:-1))||(b.t||'').localeCompare(a.t||''));
   const nm=new Set(list.map(x=>x.n)).size;
   $('#rs-sum').innerHTML=`<b>${date}</b> 기사 ${list.length}건 · 종목 ${nm}개`+(di<0?' (휴장일이라 상승률은 표시하지 않습니다)':'');
-  $('#tw5').innerHTML=`<table><thead><tr><th class="l">종목명</th><th class="l">시장</th><th>상승률</th><th class="l">이유(제목에서 추출)</th><th class="l">기사</th><th class="l">출처</th><th>시각</th></tr></thead><tbody>${list.map(x=>{const rt=rate[x.n];return `<tr><td class="l">${esc(x.n)}</td><td class="l">${mkt[x.n]?MKT(mkt[x.n]):'–'}</td><td class="${rt?'up':'mut'}">${rt?'+'+f1(rt.r)+'%':'–'}</td><td class="l" style="white-space:normal;min-width:200px">${esc(x.r||'')}</td><td class="l" style="white-space:normal;min-width:220px"><a href="${esc(safeUrl(x.u))}" target="_blank" rel="noopener noreferrer">${esc(x.h)}</a></td><td class="l">${esc(x.s||'')}</td><td>${esc(x.t||'')}</td></tr>`}).join('')}</tbody></table>`;
+  $('#tw5').innerHTML=`<table><thead><tr><th class="l">종목명</th><th class="l">시장</th><th>상승률</th><th class="l">이유</th><th class="l">공시 제목</th><th class="l">출처</th><th>공시일</th></tr></thead><tbody>${list.map(x=>{const rt=rate[x.n];return `<tr><td class="l">${esc(x.n)}</td><td class="l">${mkt[x.n]?MKT(mkt[x.n]):'–'}</td><td class="${rt?'up':'mut'}">${rt?'+'+f1(rt.r)+'%':'–'}</td><td class="l" style="white-space:normal;min-width:200px">${esc(x.r||'')}</td><td class="l" style="white-space:normal;min-width:220px"><a href="${esc(safeUrl(x.u))}" target="_blank" rel="noopener noreferrer">${esc(x.h)}</a></td><td class="l">${esc(x.s||'')}</td><td>${esc(x.t||'')}</td></tr>`}).join('')}</tbody></table>`;
 }
 /* ---------- 탭 전환 ---------- */
 const ready={};
