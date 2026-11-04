@@ -53,6 +53,8 @@ def publish():
         shutil.rmtree(REPO / sub, ignore_errors=True)
         shutil.copytree(web / sub, REPO / sub)
     keep.write_bytes(saved)
+    import json as _j
+    (REPO / 'data' / 'updated.json').write_text(_j.dumps({'t': time.strftime('%Y-%m-%d %H:%M'), 'd': last_date()}), encoding='utf-8')
     log('웹 파일 복사 완료 ->', REPO)
 
 

@@ -1,20 +1,21 @@
 <div class="wrap">
 <h1>급등주 대시보드</h1>
 <p class="sub">코스피·코스닥 일봉 (2020-01 ~ {{LAST}}). 상승 빨강, 하락 파랑. 통계는 일봉 기준이며(분봉은 급등 종목만 따로 수집 중), 상장폐지 종목은 포함되지 않았습니다.</p>
-<nav role="tablist">
+<div class="topbar"><nav role="tablist">
 <button role="tab" data-tab="stats" aria-selected="true">통계 분석</button>
 <button role="tab" data-tab="list" aria-selected="false">종목 목록</button>
 <button role="tab" data-tab="stocks" aria-selected="false">종목 차트</button>
 <button role="tab" data-tab="screen" aria-selected="false">조건검색</button>
 <button role="tab" data-tab="calendar" aria-selected="false">당일 상승 200</button>
 <button role="tab" data-tab="reasons" aria-selected="false">상승 이유</button>
-</nav>
+</nav><div class="upd"><span id="upd-t" class="mut"></span><a class="btn up-btn" id="upd-btn" href="stockdash://update">수동 업데이트</a></div></div><p class="note" id="upd-note" hidden>이 버튼은 <b>프로그램이 설치된 PC</b>에서만 작동합니다. 브라우저가 "Windows 명령 처리기 열기"를 물으면 <b>열기</b>를 누르세요. 검은 창이 뜨고 10~30분 뒤 이 페이지에 반영됩니다(새로고침 Ctrl+F5). 휴대폰·다른 PC에서는 작동하지 않습니다.</p>
 
 <section id="p-stats"><!--STATS--></section>
 
 <section id="p-list" hidden>
 <div class="card"><h2>선정 종목 목록 (<span id="n-list0"></span>개)</h2>
 <p class="sub">5거래일 내 장중 +80% 이상, 그 5일 중 3일 이상 거래대금 3천억원 이상. 열 제목을 누르면 정렬, 검색창으로 종목명을 찾습니다. 시가총액은 상승 시작 직전 거래일 기준(억원)입니다.</p>
+<div class="xbar"><button type="button" class="btn xl" data-x="list">엑셀 다운로드</button></div>
 <!--LIST--></div></section>
 
 <section id="p-stocks" hidden>
@@ -51,6 +52,7 @@
 <button class="btn" id="prev">◀ 이전 거래일</button><button class="btn" id="next">다음 거래일 ▶</button><button class="btn" id="today">최근 거래일</button>
 <label>시장<select id="mk"><option value="">전체</option><option>KOSPI</option><option>KOSDAQ</option></select></label>
 <label>최소 거래대금(억)<input type="number" id="mv" value="0" min="0" step="10" style="width:110px"></label>
+<button type="button" class="btn xl" data-x="calendar">엑셀 다운로드</button>
 <label>차트 기간<select id="cn"><option value="60">약 3개월</option><option value="120" selected>약 6개월</option><option value="250">약 1년</option></select></label>
 </div>
 <p class="sub" id="cal-sum" style="margin-top:12px"></p>
@@ -68,6 +70,7 @@
 <label>종목명 검색<input type="search" id="rs-q" placeholder="예: 삼성"></label>
 <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="rs-up" checked> 상승 기사만</label>
 <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="rs-top"> 상위 200에 든 종목만</label>
+<button type="button" class="btn xl" data-x="reasons">엑셀 다운로드</button>
 </div>
 <p class="sub" id="rs-sum" style="margin-top:12px"></p>
 <div class="tw tall" id="tw5"></div>

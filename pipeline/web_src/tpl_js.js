@@ -163,6 +163,7 @@ async function tab2(){
   await loadRs();
   const why=x=>{const L=RSMAP[date+'|'+x.t[1]]||[],a=L.find(z=>z.dir!=='down')||L[0];return a?`<a href="${esc(safeUrl(a.u))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" title="${esc(a.h||'')}">${esc(a.r||a.h)}</a>`:'<span class="mut">–</span>'};
   const body=list.map(x=>`<tr class="pick" data-t="${x.ti}"><td>${x.rk}</td><td class="l">${esc(x.t[1])}<br><small class="mut">${x.t[0]}</small></td><td class="l">${MKT(x.t[2])}</td><td class="up">+${f1(x.rate)}%</td><td>${fmt(x.val)}</td><td>${x.mc==null?'–':fmt(x.mc)}</td><td>${fmt(x.close)}</td><td class="l" style="min-width:180px;max-width:320px;overflow:hidden;text-overflow:ellipsis">${why(x)}</td><td><button type="button" class="btn" data-c="${x.ti}" aria-label="${esc(x.t[1])} 일봉 차트 보기">차트 보기</button></td></tr>`).join('');
+  T2X={date,rows:list.map(x=>[x.rk,x.t[1],x.t[0],MKT(x.t[2]),x.rate,x.val,x.mc,x.close,(()=>{const L=RSMAP[date+'|'+x.t[1]]||[],a=L.find(z=>z.dir!=='down')||L[0];return a?(a.r||a.h):''})(),(()=>{const L=RSMAP[date+'|'+x.t[1]]||[],a=L.find(z=>z.dir!=='down')||L[0];return a?a.u:''})()])};
   $('#t2c').hidden=true;$('#cb2')._shell=0;$('#cb2')._key=null;
   $('#tw2').innerHTML=`<table><thead><tr><th>순위</th><th class="l">종목명</th><th class="l">시장</th><th>상승률</th><th>거래대금(억)</th><th>시가총액(억)</th><th>종가</th><th class="l">상승 이유</th><th>차트</th></tr></thead><tbody>${body}</tbody></table>`;
   document.querySelectorAll('#tw2 tr.pick').forEach(r=>{r.onclick=()=>showT2(+r.dataset.t,idx,r)});
@@ -196,7 +197,7 @@ async function tab5(){
   const date=$('#rs-dt').value,q=$('#rs-q').value.trim(),up=$('#rs-up').checked,onlyTop=$('#rs-top').checked;
   await loadTick();
   const di=DATES.indexOf(date),rate={};
-  if(di>=0){const t=(await topYear(+date.slice(0,4)))[di]||[];t.forEach(r=>{rate[TICK[r[0]][1]]={r:r[1]}})}
+  if(di>=0){const t=(await topMonth(date.slice(0,7)))[di]||[];t.forEach(r=>{rate[TICK[r[0]][1]]={r:r[1]}})}
   const mkt={};TICK.forEach(t=>mkt[t[1]]=t[2]);
   let list=rs.filter(x=>x.d===date&&(!up||x.dir!=='down')&&(!q||x.n.includes(q))&&(!onlyTop||rate[x.n]));
   list.sort((a,b)=>((rate[b.n]?rate[b.n].r:-1)-(rate[a.n]?rate[a.n].r:-1))||(b.t||'').localeCompare(a.t||''));
@@ -228,3 +229,27 @@ async function open(name){
 }
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{open(b.dataset.tab);try{history.replaceState(null,'','#'+b.dataset.tab)}catch(e){}});
 ld('data/dates.json').then(d=>{DATES=d;const h=location.hash.slice(1);open(['stats','list','stocks','screen','calendar','reasons'].includes(h)?h:'stats')}).catch(()=>{document.body.append('날짜 데이터를 불러오지 못했습니다.')});
+
+/* ---------- 엑셀 다운로드 ---------- */
+let T2X=null,XLSXP=null;
+const loadXlsx=()=>XLSXP||(XLSXP=new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=()=>ok(window.XLSX);s.onerror=()=>{XLSXP=null;no()};document.head.append(s)}));
+const numify=v=>{if(typeof v!=='string')return v;const s=v.trim().replace(/−/g,'-');if(/^[+-]?[\d,]+(\.\d+)?%?$/.test(s))return +s.replace(/[,%+]/g,'');return v};
+function tableRows(tb,skip=[]){const hs=[...tb.querySelectorAll('thead th')].map(th=>th.innerText.replace(/[▲▼↑↓]/g,'').trim());
+  const keep=hs.map((h,i)=>skip.includes(h)?-1:i).filter(i=>i>=0);
+  const body=[...tb.querySelectorAll('tbody tr')].filter(r=>r.style.display!=='none'&&!r.hidden).map(r=>{const c=[...r.children];return keep.map(i=>numify((c[i]?c[i].innerText:'').replace(/\s*\n\s*/g,' ').trim()))});
+  return [keep.map(i=>hs[i]),...body]}
+async function saveXlsx(aoa,name,sheet){
+  try{const X=await loadXlsx();const ws=X.utils.aoa_to_sheet(aoa);ws['!cols']=aoa[0].map((h,i)=>({wch:Math.min(60,Math.max(8,...aoa.slice(0,300).map(r=>String(r[i]??'').length*1.6)))}));
+    const wb=X.utils.book_new();X.utils.book_append_sheet(wb,ws,sheet);X.writeFile(wb,name+'.xlsx')}
+  catch(e){const csv=aoa.map(r=>r.map(v=>{v=v==null?'':String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}).join(',')).join('\r\n');
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}));a.download=name+'.csv';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}}
+document.addEventListener('click',async ev=>{const b=ev.target.closest('button[data-x]');if(!b)return;const k=b.dataset.x,t0=b.textContent;b.disabled=true;b.textContent='만드는 중...';
+  try{
+    if(k==='list'){const tb=$('#lst');if(tb)await saveXlsx(tableRows(tb),'surge_list_'+DATES[DATES.length-1],'종목목록')}
+    if(k==='calendar'&&T2X){await saveXlsx([['순위','종목명','종목코드','시장','상승률(%)','거래대금(억)','시가총액(억)','종가','상승 이유','기사 링크'],...T2X.rows],'top200_'+T2X.date,'상승200')}
+    if(k==='reasons'){const tb=$('#tw5 table');if(tb){const a=tableRows(tb);const links=[...tb.querySelectorAll('tbody tr')].map(r=>{const l=r.querySelector('a[href^="http"]');return l?l.href:''});a[0].push('기사 링크');a.slice(1).forEach((r,i)=>r.push(links[i]||''));await saveXlsx(a,'reasons_'+$('#rs-dt').value,'상승이유')}}
+  }finally{b.disabled=false;b.textContent=t0}});
+
+/* ---------- 마지막 업데이트 시각 · 수동 업데이트 ---------- */
+fetch('data/updated.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(u=>{if(u)$('#upd-t').textContent='최종 업데이트 '+u.t+' (시세 '+u.d+')'}).catch(()=>{});
+$('#upd-btn').addEventListener('click',()=>{$('#upd-note').hidden=false});
