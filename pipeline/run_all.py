@@ -83,6 +83,19 @@ def push():
     log('GitHub 업로드', '성공' if r.returncode == 0 else '실패: ' + (r.stderr or r.stdout)[-400:])
 
 
+def already_done():
+    """자동 실행용: 오늘(평일, 장 마감 후) 시세가 이미 올라가 있으면 True."""
+    import json, datetime
+    try:
+        u = json.load(open(REPO / 'data' / 'updated.json', encoding='utf-8'))
+    except (OSError, ValueError):
+        return False
+    now = datetime.datetime.now()
+    if now.weekday() >= 5 or now.hour * 60 + now.minute < 15 * 60 + 40:
+        return False
+    return u.get('d') == now.strftime('%Y-%m-%d')
+
+
 def step(name, fn):
     try:
         fn()
@@ -100,6 +113,9 @@ def main():
     log('===== 작업 시작 =====')
     if '--no-push' not in args:
         step('코드 받기', pull)
+    if '--auto' in args and already_done():
+        log('오늘 업데이트는 이미 GitHub에 올라가 있어 건너뜁니다(다른 PC가 먼저 실행).')
+        return 0
     kiwoom_ok = False
     if '--no-kiwoom' not in args:
         import update_daily
