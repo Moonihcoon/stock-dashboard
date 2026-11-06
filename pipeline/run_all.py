@@ -47,12 +47,14 @@ def publish():
         page = HEAD + page
     (REPO / 'index.html').write_text(page, encoding='utf-8')
     (REPO / '.nojekyll').write_text('', encoding='utf-8')
-    keep = REPO / 'data' / 'reasons.json'
-    saved = keep.read_bytes() if keep.exists() else b'[]'
+    keeps = {n: (REPO / 'data' / n).read_bytes() for n in ('reasons.json', 'themes.json') if (REPO / 'data' / n).exists()}
     for sub in ('data', 'px'):
         shutil.rmtree(REPO / sub, ignore_errors=True)
         shutil.copytree(web / sub, REPO / sub)
-    keep.write_bytes(saved)
+    for n, b in keeps.items():
+        (REPO / 'data' / n).write_bytes(b)
+    if 'reasons.json' not in keeps:
+        (REPO / 'data' / 'reasons.json').write_text('[]', encoding='utf-8')
     import json as _j
     (REPO / 'data' / 'updated.json').write_text(_j.dumps({'t': time.strftime('%Y-%m-%d %H:%M'), 'd': last_date()}), encoding='utf-8')
     log('웹 파일 복사 완료 ->', REPO)

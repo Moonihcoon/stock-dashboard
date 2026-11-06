@@ -72,8 +72,7 @@ def fetch(key, bgn, end):
 def main():
     key = opt('dart', 'api_key')
     if not key:
-        log('DART 키가 없어 상승 이유 수집을 건너뜁니다(설정 파일 [dart] api_key).')
-        return
+        log('DART 키가 없어 공시는 건너뛰고 뉴스만 모읍니다(설정 파일 [dart] api_key).')
     data = REPO / 'data'
     dates = json.load(open(data / 'dates.json', encoding='utf-8'))
     tick = json.load(open(data / 'tick.json', encoding='utf-8'))
@@ -81,13 +80,20 @@ def main():
     old = []
     try:
         old = json.load(open(jp, encoding='utf-8'))
-        old = [x for x in old if x.get('s') == 'DART']       # 예전 네이버 형식은 버림
+        old = [x for x in old if x.get('s') == 'DART' or 'p' in x]   # 예전 네이버 형식은 버림
     except (OSError, ValueError):
         pass
     days_keep = int(opt('dart', 'days_keep', '90') or 90)
     n_days = int(opt('dart', 'fetch_days', '5') or 5) if old else int(opt('dart', 'first_days', '40') or 40)
     targets = list(range(max(1, len(dates) - n_days), len(dates)))
     tops = {}
+    for di in range(max(1, len(dates) - max(n_days, 10)), len(dates)):
+        ym = dates[di][:7]
+        if ym not in tops:
+            try:
+                tops[ym] = json.load(open(data / 'top' / f'{ym}.json', encoding='utf-8'))
+            except OSError:
+                tops[ym] = {}
     new = []
     for di in targets:
         d, p = dates[di], dates[di - 1]
@@ -100,6 +106,8 @@ def main():
         rows = tops[ym].get(str(di)) or []
         code2 = {tick[r[0]][0]: (tick[r[0]][1], r[1]) for r in rows}
         if not code2:
+            continue
+        if not key:
             continue
         lst = fetch(key, p.replace('-', ''), d.replace('-', ''))
         for it in lst:
@@ -115,6 +123,24 @@ def main():
                             u=f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={it.get('rcept_no')}",
                             s='DART', dir='up'))
         time.sleep(0.2)
+    # 뉴스(구글 뉴스 RSS) — 키 필요 없음. 이미 뉴스가 있는 종목·일은 건너뜀
+    if opt('news', 'enabled', 'yes').lower() in ('yes', 'y', '1', 'true'):
+        nd = int(opt('news', 'days', '3') or 3)
+        have = {(x['d'], x['n']) for x in old if x.get('s') != 'DART'}
+        ntg = list(range(max(1, len(dates) - nd), len(dates)))
+        nrows, nthemes = collect_news(dates, tick, tops, ntg, have)
+        new += nrows
+        tp = data / 'themes.json'
+        try:
+            th = json.load(open(tp, encoding='utf-8'))
+        except (OSError, ValueError):
+            th = {}
+        for d0, v in nthemes.items():
+            if v['map'] or d0 not in th:
+                th[d0] = v
+        th = {k: v for k, v in th.items() if k >= (datetime.date.today() - datetime.timedelta(days=days_keep)).isoformat()}
+        json.dump(th, open(tp, 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
+        log(f'뉴스: 기사 {len(nrows)}건, 테마 {sum(len(v["top"]) for v in nthemes.values())}개')
     seen = {(x['u'], x['d'], x['n']) for x in old}
     add = [x for x in new if (x['u'], x['d'], x['n']) not in seen]
     allr = old + add
@@ -133,6 +159,119 @@ def main():
             [['날짜', '종목명', '이유', '공시 제목', '공시일', '링크']].to_excel(work_dir() / '상승이유_DART.xlsx', index=False)
     except Exception:
         pass
+
+
+# ------------------------------------------------------------------ 구글 뉴스 RSS
+import email.utils, html as _html, xml.etree.ElementTree as ET
+UPW = ('특징주', '급등', '상한가', '강세', '상승', '신고가', '껑충', '급반등', '돌파', '수혜')
+DNW = ('하락', '급락', '약세', '하한가', '신저가', '폭락')
+STOP = set('특징주 상승 급등 강세 상한가 주가 기대감 소식 관련 투자 시장 코스피 코스닥 증시 오늘 마감 장중 거래 신고가 외국인 기관 개인 매수 매도 실적 발표 전망 이유 영향 효과 종목 기업 국내 글로벌 한국 미국 중국 회사 대표 개장 오전 오후 대비 약세 하락 급락 반등 돌파 지속 연속 최고 사상 주식 증권 리포트 목표가 상향 하향 우려 계약 체결 공시 확대 추진 예정 가능성 공급 소폭 대거 일제히 동반 주목 관심 기록 이틀째 사흘째 나흘째 연일 장초반 장마감 시간외 거래량 거래대금 관련주 테마주 테마 수혜주 수혜 껑충 훨훨 들썩 질주 쑥 뚝'.split())
+
+
+def _kst(dt):
+    return dt.astimezone(datetime.timezone(datetime.timedelta(hours=9))).replace(tzinfo=None)
+
+
+def gnews(name, day_from, day_to):
+    """day_from~day_to(YYYY-MM-DD) 사이 '종목명' 뉴스 제목 목록."""
+    to1 = (datetime.date.fromisoformat(day_to) + datetime.timedelta(days=1)).isoformat()
+    q = urllib.parse.quote(f'"{name}" after:{day_from} before:{to1}')
+    url = f'https://news.google.com/rss/search?q={q}&hl=ko&gl=KR&ceid=KR:ko'
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (stock-dashboard)'})
+    for k in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                root = ET.fromstring(r.read())
+            break
+        except Exception:
+            time.sleep(3 * (k + 1))
+    else:
+        return None
+    out = []
+    for it in root.iter('item'):
+        t = _html.unescape(it.findtext('title') or '').strip()
+        src = (it.findtext('source') or '').strip()
+        if src and t.endswith(' - ' + src):
+            t = t[:-len(src) - 3].strip()
+        try:
+            pub = _kst(email.utils.parsedate_to_datetime(it.findtext('pubDate')))
+        except Exception:
+            continue
+        out.append(dict(t=t, u=(it.findtext('link') or '').strip(), s=src or '뉴스', pub=pub))
+    return out
+
+
+def news_reason(t, name):
+    r = re.sub(r'^\s*[\[【(][^\]】)]{1,12}[\]】)]\s*', '', t)
+    r = r.replace(name, '', 1)
+    r = re.sub(r'^[\s,·…\-–—:\'\"“”‘’]+', '', r).strip()
+    return r[:100] or t[:100]
+
+
+def words(t, name):
+    t = t.replace(name, ' ')
+    cue = re.findall(r'([가-힣A-Za-z0-9]{2,10})\s*(?:관련주|테마주|테마|수혜주|株)', t)
+    ws = [w for w in re.findall(r'[가-힣A-Za-z][가-힣A-Za-z0-9]{1,9}', t) if w not in STOP]
+    ws = [re.sub(r'(은|는|이|가|을|를|에|의|도|로|과|와|에서|으로)$', '', w) for w in ws]
+    return set(cue), {w for w in ws if len(w) >= 2 and w not in STOP}
+
+
+def collect_news(dates, tick, tops, targets, have):
+    """targets(거래일 인덱스)마다 상위 200 종목 뉴스 → (reason rows, themes)."""
+    rows, themes = [], {}
+    names_all = {n for _, n, _ in tick}
+    for di in targets:
+        d, p = dates[di], dates[di - 1]
+        top = tops.get(d[:7], {}).get(str(di)) or []
+        if not top:
+            continue
+        lo = datetime.datetime.fromisoformat(p + 'T15:30:00')
+        hi = datetime.datetime.fromisoformat(d + 'T23:59:59')
+        per = {}
+        for r in top:
+            nm = tick[r[0]][1]
+            if (d, nm) in have:
+                continue
+            got = gnews(nm, p, d)
+            time.sleep(0.6)
+            if got is None:
+                log(f'  뉴스 조회 실패({nm}), 이 날은 여기까지만 받습니다.')
+                break
+            got = [g for g in got if lo <= g['pub'] <= hi and nm in g['t']]
+            if not got:
+                continue
+            per[nm] = [g['t'] for g in got]
+            def score(g):
+                up = any(w in g['t'] for w in UPW); dn = any(w in g['t'] for w in DNW)
+                return (('특징주' in g['t']), up and not dn, g['pub'])
+            got.sort(key=score, reverse=True)
+            for g in got[:3]:
+                up = any(w in g['t'] for w in UPW); dn = any(w in g['t'] for w in DNW)
+                rows.append(dict(d=d, t=g['pub'].strftime('%m-%d %H:%M'), n=nm, r=news_reason(g['t'], nm),
+                                 p=2 if ('특징주' in g['t'] or (up and not dn)) else 5,
+                                 h=g['t'], u=g['u'], s=g['s'], dir='down' if dn and not up else 'up'))
+        # 테마: 같은 날 3종목 이상 기사 제목에 나온 단어
+        cnt, cue_cnt, own = {}, {}, {}
+        for nm, ts in per.items():
+            cs, ws = set(), set()
+            for t in ts:
+                c, w = words(t, nm)
+                cs |= c; ws |= w
+            ws -= names_all
+            own[nm] = (cs, ws)
+            for w in ws: cnt[w] = cnt.get(w, 0) + 1
+            for w in cs: cue_cnt[w] = cue_cnt.get(w, 0) + 1
+        score = {w: c + 2 * cue_cnt.get(w, 0) for w, c in cnt.items() if c >= 3}
+        score.update({w: c * 3 for w, c in cue_cnt.items() if c >= 2 and w not in names_all})
+        tmap = {}
+        for nm, (cs, ws) in own.items():
+            cand = [w for w in (cs | ws) if w in score]
+            if cand:
+                tmap[nm] = max(cand, key=lambda w: score[w])
+        top_t = sorted({w: sum(1 for v in tmap.values() if v == w) for w in set(tmap.values())}.items(),
+                       key=lambda x: -x[1])[:10]
+        themes[d] = dict(top=[list(x) for x in top_t if x[1] >= 2], map=tmap)
+    return rows, themes
 
 
 if __name__ == '__main__':
