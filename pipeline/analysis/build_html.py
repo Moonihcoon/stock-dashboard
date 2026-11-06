@@ -41,7 +41,7 @@ rows.sort(function(a,z){var x=a.cells[c].dataset.v,y=z.cells[c].dataset.v,nx=par
 var r=(!isNaN(nx)&&!isNaN(ny)&&/^-?[\\d.]+$/.test(x))?nx-ny:x.localeCompare(y,'ko');return dir[c]?r:-r});
 rows.forEach(function(r){tb.appendChild(r)})})});
 var f=document.getElementById('flt'),cnt=document.getElementById('cnt');
-function up(){var q=f.value.trim().toLowerCase(),n=0;rows.forEach(function(r){var s=r.cells[0].textContent.toLowerCase().indexOf(q)>=0;r.hidden=!s;if(s)n++});cnt.textContent=n+'개'}
+function up(){var q=f.value.trim().toLowerCase(),n=0;rows.forEach(function(r){var s=(r.cells[0].textContent+' '+r.cells[1].textContent).toLowerCase().indexOf(q)>=0;r.hidden=!s;if(s)n++});cnt.textContent=n+'개'}
 f.addEventListener('input',up);up()})();
 """
 exn = ex

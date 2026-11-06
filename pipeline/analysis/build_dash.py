@@ -92,6 +92,43 @@ card10 = f"""<div class="card"><h2>10. 고점에서 첫 반등까지 걸린 기�
 <p class="mut" style="font-size:12px">일봉 기준(분봉상 고점·저점은 일봉 고가·저가로 대신). 같은 종목이 여러 번 들어간 사례가 있어 p값은 실제보다 작게(유의하게) 나올 수 있습니다. 구간별 사례가 8~11건인 곳은 중앙값이 크게 흔들릴 수 있습니다. 첫 반등이 없던 {R4['n']-R4['n_reb']}건은 기간·깊이 계산에서 빠졌습니다.</p></div>
 """
 
+# ---- 종목 목록: 상승폭 구분 + 첫 반등 지표 추가
+_D4 = R4['D'].copy(); _D4['key'] = _D4['ticker'].astype(str) + '|' + pd.to_datetime(_D4['start']).dt.strftime('%Y-%m-%d')
+_D4 = _D4.set_index('key')
+def _num(v, f):
+    return ('', '–') if v is None or pd.isna(v) else (f'{v}', f(v))
+_lo = {'80~100%': 80, '100~120%': 100, '120~140%': 120, '140~160%': 140, '160~180%': 160, '180~200%': 180, '200% 이상': 200}
+L2 = []
+for _, _r in lst.iterrows():
+    _k = f"{str(_r['종목코드']).zfill(6)}|{_r['상승시작일']}"
+    _x = _D4.loc[_k] if _k in _D4.index else None
+    _g = lambda c: (None if _x is None or c not in _x.index else _x[c])
+    _b = _g('bin'); _b = '' if _b is None or pd.isna(_b) else str(_b)
+    cells = [f'<td data-v="{_lo.get(_b, 0)}">{_b or "–"}</td>',
+             f'<td data-v="{html.escape(_r["종목명"])}">{html.escape(_r["종목명"])}</td>',
+             f'<td data-v="{_r["시장"]}">{_r["시장"]}</td>',
+             f'<td class="n" data-v="{_r["상승시작일"]}">{_r["상승시작일"]}</td>',
+             f'<td class="n" data-v="{_r["상승률5일_장중고가"]}">{_r["상승률5일_장중고가"]:+.1f}%</td>',
+             f'<td class="n" data-v="{_r["일평균거래대금_억"]}">{_r["일평균거래대금_억"]:,}</td>',
+             f'<td class="n" data-v="{_r["시가총액_억"]}">{_r["시가총액_억"]:,.0f}</td>',
+             f'<td class="n" data-v="{_r["고점일"]}">{_r["고점일"]}</td>',
+             f'<td class="n" data-v="{_r["고점까지_총상승률"]}">{_r["고점까지_총상승률"]:+.0f}%</td>']
+    for _c, _f in [('days_trough', lambda v: f'{v:.0f}'), ('days_confirm', lambda v: f'{v:.0f}'), ('dd', lambda v: f'{v:.1f}%'),
+                 ('rebound', lambda v: f'+{v:.1f}%'), ('ratio', lambda v: f'{v:.2f}')]:
+        _dv, _tx = _num(_g(_c), _f)
+        cells.append(f'<td class="n" data-v="{_dv}">{_tx}</td>')
+    cells += [f'<td class="n" data-v="{_r["최대낙폭_6개월"]}">{f1(_r["최대낙폭_6개월"],1)}%</td>',
+              f'<td class="n" data-v="{_r["반등횟수"]}">{int(_r["반등횟수"])}</td>',
+              f'<td class="n" data-v="{_r["저점이탈후_재반등횟수"]}">{int(_r["저점이탈후_재반등횟수"])}</td>']
+    L2.append('<tr>' + ''.join(cells) + '</tr>')
+_head2 = ['구분(상승폭)', '종목명', '시장', '상승 시작일', '5거래일 상승률', '일평균 거래대금(억)', '시가총액(억)', '고점일', '고점까지 상승',
+          '고점→저점(거래일)', '고점→+10% 반등 확정(거래일)', '저점 하락률', '반등 상승률', '하락기/상승기 거래대금(배)',
+          '6개월 최대낙폭', '반등 횟수', '이탈 후 재반등']
+t_list = ('<div class="filter"><label for="flt">종목명 검색</label><input id="flt" type="search" placeholder="예: 신풍, 바이오"><span id="cnt" class="mut"></span></div>'
+          '<div class="tw tall"><table id="lst"><thead><tr>' + ''.join(f'<th><button type="button" data-c="{i}">{h}</button></th>' for i, h in enumerate(_head2)) +
+          '</tr></thead><tbody>' + ''.join(L2) + '</tbody></table></div>'
+          '<p class="mut" style="font-size:12px">구분 = 급등 시작 전일 종가 → 고점 상승폭(20% 단위). 고점→저점·반등 확정·저점 하락률·반등 상승률은 고점 대비 −30% 이후 +10% 반등이 나온 <b>첫 반등</b> 기준(통계 10번과 같은 정의), 반등이 없던 사례는 –. 하락기/상승기 거래대금 = 하락기(고점 다음 날~첫 반등 저점) 일평균 ÷ 상승기(급등 시작일~고점) 일평균.</p>')
+
 stats = f"""
 <div class="card">
 <h2>한눈에 보는 결과</h2>
