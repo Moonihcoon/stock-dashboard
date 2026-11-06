@@ -128,19 +128,9 @@ def main():
         nd = int(opt('news', 'days', '3') or 3)
         have = {(x['d'], x['n']) for x in old if x.get('s') != 'DART'}
         ntg = list(range(max(1, len(dates) - nd), len(dates)))
-        nrows, nthemes = collect_news(dates, tick, tops, ntg, have)
+        nrows, _ = collect_news(dates, tick, tops, ntg, have)
         new += nrows
-        tp = data / 'themes.json'
-        try:
-            th = json.load(open(tp, encoding='utf-8'))
-        except (OSError, ValueError):
-            th = {}
-        for d0, v in nthemes.items():
-            if v['map'] or d0 not in th:
-                th[d0] = v
-        th = {k: v for k, v in th.items() if k >= (datetime.date.today() - datetime.timedelta(days=days_keep)).isoformat()}
-        json.dump(th, open(tp, 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
-        log(f'뉴스: 기사 {len(nrows)}건, 테마 {sum(len(v["top"]) for v in nthemes.values())}개')
+        log(f'뉴스: 새 기사 {len(nrows)}건')
     seen = {(x['u'], x['d'], x['n']) for x in old}
     add = [x for x in new if (x['u'], x['d'], x['n']) not in seen]
     allr = old + add
@@ -150,6 +140,11 @@ def main():
     tmp = str(jp) + '.tmp'
     json.dump(allr, open(tmp, 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
     os.replace(tmp, jp)
+    tdays = sorted({x['d'] for x in allr if x.get('s') != 'DART'})
+    th = build_themes(allr, tdays)
+    json.dump(th, open(data / 'themes.json', 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
+    if tdays:
+        log(f"테마({tdays[-1]}): " + ', '.join(f'{k}({v})' for k, v in th[tdays[-1]]['top'][:6]))
     hit = len({(x['d'], x['n']) for x in allr if x['d'] in {dates[i] for i in targets}})
     log(f'상승 이유(DART): {len(targets)}거래일 확인, 새 공시 {len(add)}건, 공시가 있는 상위200 종목·일 {hit}건')
     try:
@@ -208,12 +203,30 @@ def news_reason(t, name):
     return r[:100] or t[:100]
 
 
+THEMES = {  # 테마 이름: 제목에서 찾을 단어들
+    'AI': ['AI', '인공지능', '생성형', 'LLM', '챗GPT', 'GPT'], '반도체': ['반도체', 'HBM', '파운드리', '웨이퍼', '유리기판', 'D램', '낸드'],
+    '2차전지': ['2차전지', '이차전지', '배터리', '양극재', '음극재', '전고체', '리튬'], '원전': ['원전', '원자력', 'SMR', '소형모듈원자로'],
+    '로봇': ['로봇', '휴머노이드'], '방산': ['방산', 'K-방산', '미사일', '전투기', '방위산업'], '조선': ['조선', 'LNG선', '선박', 'MASGA'],
+    '우주항공': ['우주', '위성', '발사체', '항공우주', 'UAM', '드론'], '양자': ['양자'], '수소': ['수소', '연료전지'],
+    '바이오': ['바이오', '신약', '임상', '기술이전', '항암', 'ADC', '비만', 'GLP'], '의료기기': ['의료기기', '진단', '미용', '보톡스'],
+    '게임': ['게임', '신작'], '엔터': ['엔터', 'K팝', '아이돌', '콘서트', '드라마', '웹툰'], '화장품': ['화장품', 'K뷰티', '뷰티'],
+    '정보보안': ['보안', '해킹', '정보보안', '사이버'], '전력·전선': ['전력', '전선', '변압기', '전력기기', '송전', 'ESS'],
+    '데이터센터': ['데이터센터', '클라우드', '냉각'], '통신': ['5G', '6G', '통신장비'], '자율주행·전기차': ['자율주행', '전기차', '자동차부품'],
+    '가상자산': ['비트코인', '가상자산', '코인', '스테이블코인', '블록체인', 'STO'], '대북·남북경협': ['대북', '남북', '북한', '경협'],
+    '건설·인프라': ['건설', '재건', '인프라', 'SOC'], '태양광·풍력': ['태양광', '풍력', '신재생'], '철강·소재': ['철강', '희토류', '구리', '니켈', '알루미늄'],
+    '초전도체': ['초전도'], '정치테마': ['대선', '테마주', '정치'], '음식료': ['음식료', '라면', '식품', '불닭'], '여행·항공': ['여행', '항공', '면세'],
+    '해운': ['해운', '운임'], '디스플레이': ['디스플레이', 'OLED', '마이크로LED'], '스마트폰': ['스마트폰', '폴더블', '아이폰'],
+    '중국 소비': ['중국 소비', '한한령', '중국 관광'], '저PBR·밸류업': ['밸류업', '저PBR', '자사주 소각', '주주환원'],
+}
+_TK = [(th, k) for th, ks in THEMES.items() for k in ks]
+
+
 def words(t, name):
+    """제목에서 테마 이름 집합: 사전에 있는 단어 + '○○ 관련주/테마/수혜' 형태."""
     t = t.replace(name, ' ')
-    cue = re.findall(r'([가-힣A-Za-z0-9]{2,10})\s*(?:관련주|테마주|테마|수혜주|株)', t)
-    ws = [w for w in re.findall(r'[가-힣A-Za-z][가-힣A-Za-z0-9]{1,9}', t) if w not in STOP]
-    ws = [re.sub(r'(은|는|이|가|을|를|에|의|도|로|과|와|에서|으로)$', '', w) for w in ws]
-    return set(cue), {w for w in ws if len(w) >= 2 and w not in STOP}
+    found = {th for th, k in _TK if (k in t if not re.fullmatch(r'[A-Za-z0-9]+', k) else re.search(r'(?<![A-Za-z])' + re.escape(k) + r'(?![A-Za-z])', t))}
+    cue = {w for w in re.findall(r'([가-힣A-Za-z0-9]{2,8})\s*(?:관련주|테마주|테마|수혜주)', t) if w not in STOP}
+    return cue, found
 
 
 def collect_news(dates, tick, tops, targets, have):
@@ -227,7 +240,6 @@ def collect_news(dates, tick, tops, targets, have):
             continue
         lo = datetime.datetime.fromisoformat(p + 'T15:30:00')
         hi = datetime.datetime.fromisoformat(d + 'T23:59:59')
-        per = {}
         for r in top:
             nm = tick[r[0]][1]
             if (d, nm) in have:
@@ -240,7 +252,6 @@ def collect_news(dates, tick, tops, targets, have):
             got = [g for g in got if lo <= g['pub'] <= hi and nm in g['t']]
             if not got:
                 continue
-            per[nm] = [g['t'] for g in got]
             def score(g):
                 up = any(w in g['t'] for w in UPW); dn = any(w in g['t'] for w in DNW)
                 return (('특징주' in g['t']), up and not dn, g['pub'])
@@ -250,28 +261,39 @@ def collect_news(dates, tick, tops, targets, have):
                 rows.append(dict(d=d, t=g['pub'].strftime('%m-%d %H:%M'), n=nm, r=news_reason(g['t'], nm),
                                  p=2 if ('특징주' in g['t'] or (up and not dn)) else 5,
                                  h=g['t'], u=g['u'], s=g['s'], dir='down' if dn and not up else 'up'))
-        # 테마: 같은 날 3종목 이상 기사 제목에 나온 단어
+    return rows, {}
+
+
+
+def build_themes(rows, days):
+    """저장된 뉴스 제목으로 날짜별 테마를 다시 계산."""
+    out = {}
+    for d in days:
+        per = {}
+        for x in rows:
+            if x['d'] == d and x.get('s') != 'DART':
+                per.setdefault(x['n'], []).append(x.get('h', ''))
         cnt, cue_cnt, own = {}, {}, {}
         for nm, ts in per.items():
             cs, ws = set(), set()
             for t in ts:
                 c, w = words(t, nm)
                 cs |= c; ws |= w
-            ws -= names_all
             own[nm] = (cs, ws)
             for w in ws: cnt[w] = cnt.get(w, 0) + 1
             for w in cs: cue_cnt[w] = cue_cnt.get(w, 0) + 1
-        score = {w: c + 2 * cue_cnt.get(w, 0) for w, c in cnt.items() if c >= 3}
-        score.update({w: c * 3 for w, c in cue_cnt.items() if c >= 2 and w not in names_all})
+        score = {w: c for w, c in cnt.items() if c >= 2}
+        score.update({w: c for w, c in cue_cnt.items() if c >= 3 and w not in score})
         tmap = {}
         for nm, (cs, ws) in own.items():
-            cand = [w for w in (cs | ws) if w in score]
+            cand = [w for w in (ws | cs) if w in score]
             if cand:
-                tmap[nm] = max(cand, key=lambda w: score[w])
-        top_t = sorted({w: sum(1 for v in tmap.values() if v == w) for w in set(tmap.values())}.items(),
-                       key=lambda x: -x[1])[:10]
-        themes[d] = dict(top=[list(x) for x in top_t if x[1] >= 2], map=tmap)
-    return rows, themes
+                tmap[nm] = max(cand, key=lambda w: (w in ws, score[w]))
+        tops = {}
+        for v in tmap.values():
+            tops[v] = tops.get(v, 0) + 1
+        out[d] = dict(top=[[k, v] for k, v in sorted(tops.items(), key=lambda x: -x[1]) if v >= 2][:10], map=tmap)
+    return out
 
 
 if __name__ == '__main__':
