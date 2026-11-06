@@ -65,24 +65,36 @@ def git(*a):
 
 
 def pull():
-    """GitHub 웹에서 고친 내용(pipeline/ 코드, 화면)을 먼저 받아옵니다."""
-    if (REPO / '.git').exists():
-        r = git('pull', '--rebase', '--autostash')
-        log('GitHub에서 최신 코드 받기', '완료' if r.returncode == 0 else '실패: ' + (r.stderr or r.stdout)[-300:])
+    """GitHub의 최신 상태(다른 PC가 올린 결과, GitHub 웹에서 고친 코드)로 맞춥니다.
+    이 PC의 웹 파일은 매번 새로 만들기 때문에 로컬 변경은 버려도 됩니다."""
+    if not (REPO / '.git').exists():
+        return
+    r = git('fetch', 'origin')
+    if r.returncode != 0:
+        log('GitHub 받기 실패(인터넷 확인): ' + (r.stderr or r.stdout)[-300:])
+        return
+    r = git('reset', '--hard', 'origin/main')
+    log('GitHub에서 최신 코드 받기', '완료' if r.returncode == 0 else '실패: ' + (r.stderr or r.stdout)[-300:])
 
 
 def push():
     if not (REPO / '.git').exists():
         log('저장소 폴더가 git 저장소가 아니라 업로드를 건너뜁니다.')
         return
-    git('pull', '--rebase', '--autostash')
-    git('add', '-A', 'index.html', '.nojekyll', 'data', 'px', 'pipeline')
-    r = git('commit', '-m', f'daily update {last_date()}')
-    if 'nothing to commit' in (r.stdout + r.stderr):
-        log('바뀐 내용이 없어 업로드하지 않았습니다.')
-        return
-    r = git('push')
-    log('GitHub 업로드', '성공' if r.returncode == 0 else '실패: ' + (r.stderr or r.stdout)[-400:])
+    for attempt in range(3):
+        git('fetch', 'origin')
+        git('reset', '--mixed', 'origin/main')      # 방금 만든 파일은 그대로 두고 기준만 최신으로
+        git('add', '-A', 'index.html', '.nojekyll', 'data', 'px', 'pipeline')
+        r = git('commit', '-m', f'daily update {last_date()}')
+        if 'nothing to commit' in (r.stdout + r.stderr):
+            log('바뀐 내용이 없어 업로드하지 않았습니다.')
+            return
+        r = git('push')
+        if r.returncode == 0:
+            log('GitHub 업로드 성공')
+            return
+        time.sleep(10)
+    log('GitHub 업로드 실패: ' + (r.stderr or r.stdout)[-400:])
 
 
 def already_done():
@@ -111,6 +123,18 @@ def step(name, fn):
 
 
 def main():
+    lock = work_dir() / 'running.lock'
+    lock.write_text(time.strftime('%Y-%m-%d %H:%M'))
+    try:
+        return _main()
+    finally:
+        try:
+            lock.unlink()
+        except OSError:
+            pass
+
+
+def _main():
     args = set(sys.argv[1:])
     log('===== 작업 시작 =====')
     if '--no-push' not in args:
