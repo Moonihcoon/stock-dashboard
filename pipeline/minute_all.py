@@ -28,6 +28,16 @@ def wait_if_busy():
         time.sleep(60)
 
 
+def keep_awake(on=True):
+    """받는 동안 Windows가 절전/잠자기로 들어가지 않게 합니다(끝나면 자동 해제)."""
+    try:
+        import ctypes
+        # ES_CONTINUOUS | ES_SYSTEM_REQUIRED  (화면은 꺼져도 PC는 깨어 있음)
+        ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | (0x00000001 if on else 0))
+    except Exception:
+        pass
+
+
 def main():
     from kiwoom_api import Kiwoom
     OUT.mkdir(exist_ok=True)
@@ -36,9 +46,11 @@ def main():
         log('전 종목 분봉: 이미 다른 창에서 받고 있어 종료합니다.')
         return
     me.write_text(str(os.getpid()))
+    keep_awake(True)
     try:
         _run(Kiwoom, me)
     finally:
+        keep_awake(False)
         try:
             me.unlink()
         except OSError:
