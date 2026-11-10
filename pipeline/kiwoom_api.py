@@ -106,6 +106,11 @@ class Kiwoom:
             if any(c in hay for c in TOKEN_BAD_CODES):
                 self.refresh_token()
                 continue
+            if code not in ("0", "None", "") and ("1631" in hay or "처리하는 중에 오류" in hay) \
+                    and attempt < retries - 1:
+                # 키움 서버 일시 오류 → 잠시 기다렸다 같은 요청을 다시 보냄
+                time.sleep((2, 4, 8, 15, 30, 60)[min(attempt, 5)] + random.random())
+                continue
             if code not in ("0", "None", ""):
                 raise RuntimeError(f"{api_id} 오류 {code}: {msg}")
             return j, r.headers.get("cont-yn", ""), r.headers.get("next-key", "")

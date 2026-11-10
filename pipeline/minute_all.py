@@ -57,6 +57,28 @@ def main():
             pass
 
 
+def _one(api, t, names, p, today):
+    """한 종목: 저장된 마지막 시각 이후를 받아 이어 붙이고 진행 기록을 갱신."""
+    f = OUT / f'{t}.parquet'
+    old = None
+    if f.exists():
+        try:
+            old = pd.read_parquet(f)
+        except Exception:
+            old = None
+    start = (old['time'].max() + pd.Timedelta(minutes=1)).strftime('%Y%m%d') if old is not None and len(old) else '20000101'
+    df = api.minute(t, start, max_pages=2000)
+    if df is not None and len(df):
+        if old is not None:
+            df = pd.concat([old, df]).drop_duplicates('time', keep='last').sort_values('time')
+        df['name'] = names.get(t, '')
+        df.to_parquet(f, index=False)
+        p[t] = dict(name=str(names.get(t, '')), first=str(df['time'].min()), last=str(df['time'].max()),
+                    rows=int(len(df)), upd=today)
+    else:
+        p[t] = dict(p.get(t, {}), name=str(names.get(t, '')), upd=today, rows=p.get(t, {}).get('rows', 0))
+
+
 def _run(Kiwoom, me):
     p = json.load(open(PROG, encoding='utf-8')) if PROG.exists() else {}
     d = analysis_panel()
@@ -69,39 +91,35 @@ def _run(Kiwoom, me):
     log(f'전 종목 분봉: 대상 {len(tickers):,}종목, 이번에 받을 종목 {len(todo):,}개 → {OUT}')
     api = Kiwoom(*kiwoom_keys())
     t0 = time.time()
+    failed = []
     for i, t in enumerate(todo, 1):
         wait_if_busy()
         me.touch()
-        f = OUT / f'{t}.parquet'
-        old = None
-        if f.exists():
-            try:
-                old = pd.read_parquet(f)
-            except Exception:
-                old = None
-        start = (old['time'].max() + pd.Timedelta(minutes=1)).strftime('%Y%m%d') if old is not None and len(old) else '20000101'
         try:
-            df = api.minute(t, start, max_pages=2000)
+            _one(api, t, names, p, today)
         except Exception as e:
             log(f'  {t} {names.get(t, "")} 실패: {e}')
+            failed.append(t)
             time.sleep(5)
             if 'token' in str(e).lower() or '인증' in str(e):
                 api = Kiwoom(*kiwoom_keys())
             continue
-        if df is not None and len(df):
-            if old is not None:
-                df = pd.concat([old, df]).drop_duplicates('time', keep='last').sort_values('time')
-            df['name'] = names.get(t, '')
-            df.to_parquet(f, index=False)
-            p[t] = dict(name=str(names.get(t, '')), first=str(df['time'].min()), last=str(df['time'].max()),
-                        rows=int(len(df)), upd=today)
-        else:
-            p[t] = dict(p.get(t, {}), name=str(names.get(t, '')), upd=today, rows=p.get(t, {}).get('rows', 0))
         if i % 10 == 0 or i == len(todo):
             save_prog(p)
             el = time.time() - t0
             log(f'  {i:,}/{len(todo):,} 완료 · 경과 {el/3600:.1f}시간 · 남은 예상 {el/i*(len(todo)-i)/3600:.1f}시간')
     save_prog(p)
+    if failed:
+        log(f'실패한 {len(failed)}종목을 5분 뒤 다시 받습니다.')
+        time.sleep(300)
+        for t in failed:
+            wait_if_busy()
+            me.touch()
+            try:
+                _one(api, t, names, p, today)
+            except Exception as e:
+                log(f'  {t} {names.get(t, "")} 재시도 실패(다음 실행 때 다시 받음): {e}')
+        save_prog(p)
     rows = sum(v.get('rows', 0) for v in p.values())
     firsts = [v['first'] for v in p.values() if v.get('first')]
     log(f'전 종목 분봉 끝: {len(p):,}종목, {rows:,}행, 가장 이른 분봉 {min(firsts) if firsts else "-"}')
