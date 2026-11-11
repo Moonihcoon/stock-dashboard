@@ -130,12 +130,16 @@ function tab1(){
   $('#tw1').innerHTML=`<table><thead><tr><th>일자</th><th>종가</th><th>등락률</th><th>거래대금(억)</th></tr></thead><tbody>${body}</tbody></table>`;
 }
 /* ---------- 탭: 조건검색 ---------- */
+/* 거래일 조건(5~8일): 조합 키와 표시값 */
+const ckey=(r,v,w)=>w==='5'?`${r}|${v}`:`${r}|${v}|${w}`;
+const wnSet=(sel,w)=>{const c=document.querySelector(sel).closest('.card');c.querySelectorAll('.wn').forEach(x=>x.textContent=w)};
 function tab3(){
-  const key=`${$('#f-rise').value}|${$('#f-val').value}`,yr=$('#f-year').value,mk=$('#f-mk').value,C=CMB[key];
-  let list=C.rows.map(r=>({e:EPM[r[0]],s:r})).filter(x=>(!yr||D(x.e.start).startsWith(yr))&&(!mk||x.e.mkt===mk)).sort((a,b)=>b.e.start-a.e.start);
+  const w=$('#f-win').value;wnSet('#f-win',w);
+  const key=ckey($('#f-rise').value,$('#f-val').value,w),yr=$('#f-year').value,mk=$('#f-mk').value,C=CMB[key];
+  let list=C.rows.map(r=>({e:EPM[r[0]],s:r,rw:r[6]??EPM[r[0]].rise,av:r[7]??EPM[r[0]].avgv})).filter(x=>(!yr||D(x.e.start).startsWith(yr))&&(!mk||x.e.mkt===mk)).sort((a,b)=>b.e.start-a.e.start);
   const s=C.sum;
-  $('#sc-sum').innerHTML=`조건: 5거래일 내 장중 +${$('#f-rise').value}% 이상, 5일 중 3일 이상 거래대금 ${fmt($('#f-val').value)}억 이상 → <b>${s.n}건 (${s.tk}종목)</b>. −30% 하락 후 +10% 반등 ${s.c2}건, 이탈 후 재반등 ${s.c3}건, 사례당 평균 ${s.rep}회 반복. 첫 반등 저점 중앙값 ${s.first_med}%, 이탈 후 추가 하락 중앙값 ${s.brk_med}%. −50%까지 내려간 ${s.reach50}건 중 20% 반등이 없던 건 <b>${s.norb50}건(${s.norb_tk}종목)</b>. 표시 ${list.length}건.`;
-  $('#tw3').innerHTML=`<table><thead><tr><th class="l">종목명</th><th class="l">시장</th><th>상승 시작일</th><th>5일 상승률</th><th>일 평균 거래대금(억)</th><th>시가총액(억)</th><th>첫 반등 저점</th><th>반등</th><th>재반등</th><th class="l">−50% 구간</th></tr></thead><tbody>${list.map((x,i)=>{const e=x.e;return `<tr class="pick" data-i="${i}" tabindex="0"><td class="l">${e.name}</td><td class="l">${MKT(e.mkt)}</td><td>${D(e.start)}</td><td class="up">+${f1(e.rise)}%</td><td>${fmt(e.avgv)}</td><td>${fmt(e.mcap)}</td><td class="dn">${x.s[1]==null?'–':f1(x.s[1])+'%'}</td><td>${x.s[2]}</td><td>${x.s[3]}</td><td class="l ${x.s[4]===1?'up':'mut'}">${f6txt(x.s[4])}</td></tr>`}).join('')}</tbody></table>`;
+  $('#sc-sum').innerHTML=`조건: ${w}거래일 내 장중 +${$('#f-rise').value}% 이상, ${w}일 중 3일 이상 거래대금 ${fmt($('#f-val').value)}억 이상 → <b>${s.n}건 (${s.tk}종목)</b>. −30% 하락 후 +10% 반등 ${s.c2}건, 이탈 후 재반등 ${s.c3}건, 사례당 평균 ${s.rep}회 반복. 첫 반등 저점 중앙값 ${s.first_med}%, 이탈 후 추가 하락 중앙값 ${s.brk_med}%. −50%까지 내려간 ${s.reach50}건 중 20% 반등이 없던 건 <b>${s.norb50}건(${s.norb_tk}종목)</b>. 표시 ${list.length}건.`;
+  $('#tw3').innerHTML=`<table><thead><tr><th class="l">종목명</th><th class="l">시장</th><th>상승 시작일</th><th>${w}일 상승률</th><th>일 평균 거래대금(억)</th><th>시가총액(억)</th><th>첫 반등 저점</th><th>반등</th><th>재반등</th><th class="l">−50% 구간</th></tr></thead><tbody>${list.map((x,i)=>{const e=x.e;return `<tr class="pick" data-i="${i}" tabindex="0"><td class="l">${e.name}</td><td class="l">${MKT(e.mkt)}</td><td>${D(e.start)}</td><td class="up">+${f1(x.rw)}%</td><td>${fmt(x.av)}</td><td>${fmt(e.mcap)}</td><td class="dn">${x.s[1]==null?'–':f1(x.s[1])+'%'}</td><td>${x.s[2]}</td><td>${x.s[3]}</td><td class="l ${x.s[4]===1?'up':'mut'}">${f6txt(x.s[4])}</td></tr>`}).join('')}</tbody></table>`;
   const show=i=>{const x=list[i];if(!x){$('#cb3').replaceChildren();$('#cb3')._shell=0;$('#sc-title').textContent='조건에 맞는 종목이 없습니다.';return}
     const e=x.e;document.querySelectorAll('#tw3 tr.pick').forEach(r=>r.classList.toggle('sel',+r.dataset.i===i));
     $('#sc-title').textContent=`${e.name} (${MKT(e.mkt)}) 일봉, 상승 시작 ${D(e.start)}`;
@@ -220,9 +224,9 @@ async function open(name){
       tab1()}
     if(name==='screen'){await loadEp();
       if(!ready.x){ready.x=1;const ys=[...new Set(Object.values(EPM).map(e=>D(e.start).slice(0,4)))].sort();$('#f-year').innerHTML='<option value="">전체</option>'+ys.map(y=>`<option>${y}</option>`).join('');
-        ['f-rise','f-val','f-year','f-mk'].forEach(i=>$('#'+i).onchange=tab3);tab3()}
+        ['f-win','f-rise','f-val','f-year','f-mk'].forEach(i=>$('#'+i).onchange=tab3);tab3()}
       else{const c=$('#cb3');if(c._redraw)c._redraw()}}
-    if(name==='cand'){await loadEp();if(!ready.cd){ready.cd=1;['c-val','c-rise','c-st','c-mk'].forEach(i=>$('#'+i).onchange=tab6)}tab6()}
+    if(name==='cand'){await loadEp();if(!ready.cd){ready.cd=1;['c-win','c-val','c-rise','c-st','c-mk'].forEach(i=>$('#'+i).onchange=tab6)}tab6()}
     if(name==='reasons')await tab5();
     if(name==='calendar'){if(!ready.c){ready.c=1;await loadTick();$('#dt').value=DATES[DATES.length-1];
         $('#dt').onchange=tab2;$('#mk').onchange=tab2;$('#mv').oninput=tab2;$('#today').onclick=()=>{$('#dt').value=DATES[DATES.length-1];tab2()};$('#t2x').onclick=()=>{$('#t2c').hidden=true;document.querySelectorAll('#tw2 tr.sel').forEach(x=>x.classList.remove('sel'))};$('#cn').onchange=()=>{const s=document.querySelector('#tw2 tr.sel');if(s&&!$('#t2c').hidden)s.querySelector('button[data-c]').click()};
@@ -261,13 +265,14 @@ $('#upd-btn').addEventListener('click',()=>{$('#upd-note').hidden=false});
 /* ---------- 탭: 후보종목 ---------- */
 let T6X=[];
 function tab6(){
-  const key=`${$('#c-rise').value}|${$('#c-val').value}`,C=CMB[key],live=$('#c-st').value==='live',mk=$('#c-mk').value;
+  const w=$('#c-win').value;wnSet('#c-win',w);
+  const key=ckey($('#c-rise').value,$('#c-val').value,w),C=CMB[key],live=$('#c-st').value==='live',mk=$('#c-mk').value;
   const all=(C.cand||[]);
-  let list=all.map(c=>({e:EPM[c[0]],c})).filter(x=>x.e&&(!live||x.c[7]===1)&&(!mk||x.e.mkt===mk)).sort((a,b)=>b.e.start-a.e.start);
+  let list=all.map(c=>({e:EPM[c[0]],c,rw:c[9]??(EPM[c[0]]||{}).rise,av:c[10]??(EPM[c[0]]||{}).avgv})).filter(x=>x.e&&(!live||x.c[7]===1)&&(!mk||x.e.mkt===mk)).sort((a,b)=>b.e.start-a.e.start);
   const stt=c=>(c[8]>0?`−30% 후 반등 ${c[8]}회`:(c[1]?'−30% 도달·반등 없음':'−30% 미도달'))+(c[7]?' · 최근':'');
-  $('#c-sum').innerHTML=`조건: 5거래일 내 장중 +${$('#c-rise').value}% 이상, 3일 이상 거래대금 ${fmt($('#c-val').value)}억 이상. 충족 <b>${all.length}건</b>(${new Set(all.map(c=>c[0].split('_')[0])).size}종목), 그중 최근(고점 후 6개월 이내) <b>${all.filter(c=>c[7]===1).length}건</b>. 표시 ${list.length}건.`;
-  T6X=list.map(x=>{const e=x.e,c=x.c;return [e.name,e.code,MKT(e.mkt),D(e.start),e.rise,e.avgv,e.mcap,D(e.peakDate),e.peak,c[5],D(c[6]),c[2],c[3],c[4],stt(c)]});
-  $('#tw6').innerHTML=list.length?`<table><thead><tr><th class="l">종목명</th><th class="l">시장</th><th>상승 시작일</th><th>5일 상승률</th><th>일평균 거래대금(억)</th><th>시가총액(억)</th><th>고점일</th><th>고점</th><th>현재가</th><th>고점 대비 현재</th><th>고점 이후 최저</th><th>고점 후 경과</th><th class="l">하락·반등 (참고)</th></tr></thead><tbody>${list.map((x,i)=>{const e=x.e,c=x.c;return `<tr class="pick" data-i="${i}" tabindex="0"><td class="l">${esc(e.name)}</td><td class="l">${MKT(e.mkt)}</td><td>${D(e.start)}</td><td class="up">+${f1(e.rise)}%</td><td>${fmt(e.avgv)}</td><td>${fmt(e.mcap)}</td><td>${D(e.peakDate)}</td><td>${fmt(e.peak)}</td><td>${fmt(c[5])}<br><small class="mut">${D(c[6])}</small></td><td class="${c[2]<0?'dn':'up'}">${pctTxt(c[2])}</td><td class="dn">${pctTxt(c[3])}</td><td>${c[4]}일</td><td class="l">${stt(c)}</td></tr>`}).join('')}</tbody></table>`:`<p class="mut" style="padding:12px">${live?'최근 6개월 안에 이 조건을 충족한 급등이 없습니다. 범위를 "전체 기간"으로 바꾸거나 조건을 낮춰 보세요.':'조건에 맞는 종목이 없습니다.'}</p>`;
+  $('#c-sum').innerHTML=`조건: ${w}거래일 내 장중 +${$('#c-rise').value}% 이상, ${w}일 중 3일 이상 거래대금 ${fmt($('#c-val').value)}억 이상. 충족 <b>${all.length}건</b>(${new Set(all.map(c=>c[0].split('_')[0])).size}종목), 그중 최근(고점 후 6개월 이내) <b>${all.filter(c=>c[7]===1).length}건</b>. 표시 ${list.length}건.`;
+  T6X=list.map(x=>{const e=x.e,c=x.c;return [e.name,e.code,MKT(e.mkt),D(e.start),x.rw,x.av,e.mcap,D(e.peakDate),e.peak,c[5],D(c[6]),c[2],c[3],c[4],stt(c)]});
+  $('#tw6').innerHTML=list.length?`<table><thead><tr><th class="l">종목명</th><th class="l">시장</th><th>상승 시작일</th><th>${w}일 상승률</th><th>일평균 거래대금(억)</th><th>시가총액(억)</th><th>고점일</th><th>고점</th><th>현재가</th><th>고점 대비 현재</th><th>고점 이후 최저</th><th>고점 후 경과</th><th class="l">하락·반등 (참고)</th></tr></thead><tbody>${list.map((x,i)=>{const e=x.e,c=x.c;return `<tr class="pick" data-i="${i}" tabindex="0"><td class="l">${esc(e.name)}</td><td class="l">${MKT(e.mkt)}</td><td>${D(e.start)}</td><td class="up">+${f1(x.rw)}%</td><td>${fmt(x.av)}</td><td>${fmt(e.mcap)}</td><td>${D(e.peakDate)}</td><td>${fmt(e.peak)}</td><td>${fmt(c[5])}<br><small class="mut">${D(c[6])}</small></td><td class="${c[2]<0?'dn':'up'}">${pctTxt(c[2])}</td><td class="dn">${pctTxt(c[3])}</td><td>${c[4]}일</td><td class="l">${stt(c)}</td></tr>`}).join('')}</tbody></table>`:`<p class="mut" style="padding:12px">${live?'최근 6개월 안에 이 조건을 충족한 급등이 없습니다. 범위를 "전체 기간"으로 바꾸거나 조건을 낮춰 보세요.':'조건에 맞는 종목이 없습니다.'}</p>`;
   const show=i=>{const x=list[i];if(!x){$('#cb6').replaceChildren();$('#cb6')._shell=0;$('#c-title').textContent='';return}
     const e=x.e;document.querySelectorAll('#tw6 tr.pick').forEach(r=>r.classList.toggle('sel',+r.dataset.i===i));
     $('#c-title').textContent=`${e.name} (${MKT(e.mkt)}) 일봉 · 고점 ${fmt(e.peak)} · −30% 선 ${fmt(Math.round(e.peak*0.7))}`;
@@ -276,4 +281,4 @@ function tab6(){
   show(0);
 }
 document.addEventListener('click',async ev=>{const b=ev.target.closest('button[data-x="cand"]');if(!b)return;
-  await saveXlsx([['종목명','종목코드','시장','상승 시작일','5일 상승률(%)','일평균 거래대금(억)','시가총액(억)','고점일','고점','현재가','기준일','고점 대비 현재(%)','고점 이후 최저(%)','고점 후 경과(거래일)','하락·반등(참고)'],...T6X],'candidates_'+$('#c-rise').value+'_'+$('#c-val').value,'후보종목')});
+  await saveXlsx([['종목명','종목코드','시장','상승 시작일',$('#c-win').value+'일 상승률(%)','일평균 거래대금(억)','시가총액(억)','고점일','고점','현재가','기준일','고점 대비 현재(%)','고점 이후 최저(%)','고점 후 경과(거래일)','하락·반등(참고)'],...T6X],'candidates_'+$('#c-win').value+'d_'+$('#c-rise').value+'_'+$('#c-val').value,'후보종목')});
