@@ -146,6 +146,8 @@ def _main():
     if '--no-kiwoom' not in args:
         import update_daily
         kiwoom_ok = step('키움 일봉', update_daily.main)
+    import minute_daily
+    step('분봉 일별 요약', minute_daily.main)
     load_panel(refresh=True)
     if not step('통계 분석', analysis):
         log('분석이 실패해서 웹 파일은 바꾸지 않았습니다.')

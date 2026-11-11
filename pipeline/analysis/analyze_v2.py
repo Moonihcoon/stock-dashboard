@@ -10,6 +10,7 @@
  5) 기간   : 고점일로부터 달력 기준 6개월.
 
 일봉 한계: 같은 날 안에서 저가/고가의 선후는 알 수 없어 '저점일 다음 거래일부터' 반등을 인정(보수적).
+분봉 보완: 분봉이 있는 날(키움 제공 최근 약 1년)은 정규장 분봉으로 고가·저가·종가를 잡고 같은 날 안의 순서를 반영.
 """
 from __future__ import annotations
 import numpy as np, pandas as pd
@@ -144,29 +145,55 @@ def horizon_end(g, k, nxt, p):
     return e, complete, trunc
 
 
+def _col(g, c):
+    return g[c].to_numpy(float) if c in g.columns else np.full(len(g), np.nan)
+
+
 def analyze_chain(g, k, peak, e, p: P):
+    """분봉이 있는 날(hpre·hpost·lpost 값이 있는 날)은 같은 날 안의 순서를 반영:
+    - 고점일: 고점이 나온 '이후'의 저가(lpost)를 하락에 포함 → 고점 당일 저점(0일)도 가능
+    - 저가가 새로 나온 날: 그 저가 '이전'의 고가(hpre)로 직전 저점 대비 반등을 먼저 확인하고,
+      그 저가 '이후'의 고가(hpost)로 당일 반등(+10%)을 인정
+    분봉이 없는 날은 기존 일봉 방식(저점 다음 거래일부터 반등 인정) 그대로."""
     op = g['open'].to_numpy(float); hi = g['high'].to_numpy(float)
     lo = g['low'].to_numpy(float); cl = g['close'].to_numpy(float)
     n = len(g)
+    ninf = -np.inf
+    hpre = np.nan_to_num(_col(g, 'hpre'), nan=ninf)
+    hpost = np.nan_to_num(_col(g, 'hpost'), nan=ninf)
+    lpost = _col(g, 'lpost')
+    lo_eff = lo.copy()
+    lo_eff[k] = lpost[k] if np.isfinite(lpost[k]) else np.inf     # 고점일은 고점 이후 저가만
+    hpre[k] = hpost[k] = ninf                                      # 고점일의 저가 시각은 고점 이후 저가와 다를 수 있어 쓰지 않음
+    rbm = 1 + p.rb
+
+    def scan(t0, run_min, run_i, thr):
+        """t0~e 를 따라가며 러닝 최저가 대비 +rb 반등이 처음 확인되는 (저점 idx, 확인 idx)."""
+        for t in range(t0, e + 1):
+            l = lo_eff[t]
+            if run_i >= 0 and t > run_i and (thr is None or run_min <= thr):
+                hb = hi[t] if not l < run_min else hpre[t]
+                if hb >= run_min * rbm:
+                    return (run_i, t), run_min
+            if l < run_min:
+                run_min, run_i = l, t
+                if (thr is None or run_min <= thr) and hpost[t] >= run_min * rbm:
+                    return (t, t), run_min
+        return None, run_min
+
     out = dict(troughs=[], end=None, reached30=False, first=None, cens_depth=np.nan)
     if e <= k:
         return out
-    out['max_dd'] = float(lo[k + 1:e + 1].min() / peak - 1)
+    out['max_dd'] = float(np.min(lo_eff[k:e + 1]) / peak - 1)
     out['reached30'] = out['max_dd'] <= -p.min_dd
     # --- 1단계: 첫 반등저점
-    run_min, run_i = np.inf, -1
-    first = None
-    for t in range(k + 1, e + 1):
-        if lo[t] < run_min:
-            run_min, run_i = lo[t], t
-        if run_i >= 0 and t > run_i and run_min <= peak * (1 - p.min_dd) and hi[t] >= run_min * (1 + p.rb):
-            first = (run_i, t); break
+    first, _ = scan(k, np.inf, -1, peak * (1 - p.min_dd))
     if first is None:
         out['end'] = 'no_first_rebound' if out['reached30'] else 'never_30'
         out['cens_depth'] = out['max_dd']
         return out
     tr_i, cf_i = first
-    L = lo[tr_i]
+    L = lo_eff[tr_i]
     out['troughs'].append(dict(idx=tr_i, confirm=cf_i, low=L, dd_peak=L / peak - 1, depth_vs_ref=np.nan,
                                ref_prev=np.nan, days_from_peak=tr_i - k))
     # --- 2단계 이후: 이탈 -> 재반등 체인
@@ -177,33 +204,32 @@ def analyze_chain(g, k, peak, e, p: P):
             if lo[x] < ref:
                 u = x; break
         seg_end = (u - 1) if u is not None else e
-        leg_high = float(hi[tr_i + 1:seg_end + 1].max()) if seg_end >= tr_i + 1 else float(hi[tr_i])
+        cands = []
+        if np.isfinite(hpost[tr_i]):
+            cands.append((float(hpost[tr_i]), 0))                 # 저점 당일, 저점 이후 고가
+        if seg_end >= tr_i + 1:
+            j = int(np.argmax(hi[tr_i + 1:seg_end + 1]))
+            cands.append((float(hi[tr_i + 1 + j]), j + 1))
+        leg_high, leg_days = max(cands, key=lambda c: (c[0], -c[1])) if cands else (float(hi[tr_i]), 0)
         cur = out['troughs'][-1]
         cur.update(leg_high=leg_high, leg_ret=leg_high / L - 1, broken=u is not None,
-                   break_idx=u, ref=ref,
-                   leg_days=int(np.argmax(hi[tr_i + 1:seg_end + 1]) + 1) if seg_end >= tr_i + 1 else 0,
+                   break_idx=u, ref=ref, leg_days=leg_days,
                    days_to_break=(u - tr_i) if u is not None else np.nan)
         if u is None:
             out['end'] = 'no_break'; break
-        run_min, run_i = lo[u], u
-        nxt = None
-        for t in range(u + 1, e + 1):
-            if lo[t] < run_min:
-                run_min, run_i = lo[t], t
-            if t > run_i and hi[t] >= run_min * (1 + p.rb):
-                nxt = (run_i, t); break
+        nxt, run_min = scan(u, np.inf, -1, None)
         if nxt is None:
             out['end'] = 'broke_no_rebound'
             out['cens_depth_ref'] = float(lo[u:e + 1].min() / ref - 1)
             break
         tr_i, cf_i = nxt
-        L = lo[tr_i]
+        L = lo_eff[tr_i]
         out['troughs'].append(dict(idx=tr_i, confirm=cf_i, low=L, dd_peak=L / peak - 1,
                                    depth_vs_ref=L / ref - 1, ref_prev=ref, days_from_peak=tr_i - k))
     # 부가 지표
     for tr in out['troughs']:
         i, c = tr['idx'], tr['confirm']
-        tr['same_day_range'] = float(hi[i] / lo[i] - 1)
+        tr['same_day_range'] = float(hi[i] / tr['low'] - 1)
         a, b = i + 1, min(n - 1, i + 5)
         tr['fwd5_max_trough'] = float(hi[a:b + 1].max() / tr['low'] - 1) if b >= a else np.nan
         a2, b2 = c + 1, min(n - 1, c + 5)

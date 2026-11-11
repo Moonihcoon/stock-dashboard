@@ -2,6 +2,7 @@
 from __future__ import annotations
 import configparser, os, sys, json, time
 from pathlib import Path
+import numpy as np
 import pandas as pd
 
 PIPE = Path(__file__).resolve().parent          # .../stock-dashboard/pipeline
@@ -87,7 +88,9 @@ def _fix(d: pd.DataFrame) -> pd.DataFrame:
 
 def load_panel(refresh=False) -> pd.DataFrame:
     """분석 스크립트가 쓰는 전체 시세 패널. 한 번 읽으면 메모리에 보관합니다."""
-    global _PANEL
+    global _PANEL, _AP
+    if refresh:
+        _AP = None
     if _PANEL is not None and not refresh:
         return _PANEL
     p = panel_path()
@@ -140,8 +143,44 @@ def analysis_panel() -> pd.DataFrame:
         ec = etf_codes()
         nm = d.drop_duplicates('ticker', keep='last')
         bad = {t for t, n in zip(nm.ticker, nm.name) if excluded(t, n, ec)}
-        _AP = d[~d.ticker.isin(bad)].reset_index(drop=True)
+        _AP = apply_minute(d[~d.ticker.isin(bad)].reset_index(drop=True))
     return _AP
+
+
+def apply_minute(d: pd.DataFrame) -> pd.DataFrame:
+    """분봉이 있는 날은 정규장(09:00~15:30) 분봉으로 고가·저가·종가를 잡고,
+    같은 날 안의 순서 정보(hpre·hpost·lpost)를 붙입니다. 분봉이 없는 날은 일봉 그대로(빈칸).
+    설정 [stats] minute = no 이면 쓰지 않습니다."""
+    f = work_dir() / 'minute_daily.parquet'
+    for c in ('hpre', 'hpost', 'lpost'):
+        d[c] = np.nan
+    if opt('stats', 'minute', 'yes').lower() in ('no', '0', 'false') or not f.exists():
+        return d
+    m = pd.read_parquet(f)
+    m['date'] = pd.to_datetime(m['date'])
+    x = d[['ticker', 'date', 'high', 'low', 'close']].merge(m, on=['ticker', 'date'], how='left')
+    # 분봉은 받은 날 기준 수정주가라 그 뒤 액면분할 등이 있으면 일봉과 배율이 다름 → 종가 비율로 맞춤
+    r = (x['close'] / x['mc']).where(x['mc'] > 0)
+    sc = r.where((r - 1).abs() > 0.005, 1.0)
+    for c in ('mh', 'ml', 'mc', 'hpre', 'hpost', 'lpost'):
+        x[c] = x[c] * sc
+    ok = (x['nbars'] >= 60) & ((x['mh'] / x['high'] - 1).abs() <= 0.03) & ((x['ml'] / x['low'] - 1).abs() <= 0.03)
+    ok = ok.fillna(False).to_numpy()
+    n_ok = int(ok.sum())
+    if n_ok:
+        for c in ('high', 'low', 'close'):
+            d[c] = d[c].astype(float)
+        ch = lambda a, b: int((ok & (np.abs(x[a].to_numpy(float) / d[b].to_numpy(float) - 1) > 1e-9)).sum())
+        nh, nl, nc = ch('mh', 'high'), ch('ml', 'low'), ch('mc', 'close')
+        d.loc[ok, 'high'] = x.loc[ok, 'mh'].to_numpy()
+        d.loc[ok, 'low'] = x.loc[ok, 'ml'].to_numpy()
+        d.loc[ok, 'close'] = x.loc[ok, 'mc'].to_numpy()
+        for c in ('hpre', 'hpost', 'lpost'):
+            d.loc[ok, c] = x.loc[ok, c].to_numpy()
+        dd = d.loc[ok, 'date']
+        log(f'통계에 분봉 반영: {n_ok:,}일({d.loc[ok, "ticker"].nunique():,}종목, {dd.min():%Y-%m-%d}~{dd.max():%Y-%m-%d}) · '
+            f'일봉과 다른 값 고가 {nh:,} / 저가 {nl:,} / 종가 {nc:,}일 · 분봉 있으나 제외 {int(x["mh"].notna().sum()) - n_ok:,}일')
+    return d
 
 
 def last_date() -> str:
