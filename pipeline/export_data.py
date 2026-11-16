@@ -23,6 +23,7 @@ def main():
     nm = d.drop_duplicates('ticker', keep='last').set_index('ticker')
     etf = {t for t, n in zip(nm.index, nm['name']) if is_etf(t, n, ec)}
     d['is_etf'] = d['ticker'].isin(etf).astype(int)
+    ind = d.dropna(subset=['industry_name']).query("industry_name != ''").drop_duplicates('ticker', keep='last').set_index('ticker')['industry_name']
     d = d.drop(columns=['industry_name'])
     last = d['date'].max().strftime('%Y%m%d')
     for f in out.glob('daily_2020_*.parquet'):
@@ -33,6 +34,7 @@ def main():
     t = d.groupby('ticker').agg(name=('name', 'last'), market=('market', 'last'), first=('date', 'min'),
                                 last=('date', 'max'), rows=('date', 'size'), is_etf=('is_etf', 'max')).reset_index()
     t['is_pref'] = [int(is_pref(x)) for x in t['ticker']]
+    t['industry'] = t['ticker'].map(ind).fillna('')
     t.to_csv(out / 'tickers.csv', index=False, encoding='utf-8-sig')
     md = work_dir() / 'minute'
     if md.exists():

@@ -176,16 +176,24 @@ class Kiwoom:
         return out
 
     def listing(self) -> pd.DataFrame:
-        """코스피·코스닥 보통주 목록 + 상장주식수(listCount). 우선주·스팩·리츠 제외."""
-        rows = []
+        """코스피·코스닥 보통주 목록 + 상장주식수(listCount)·업종명(upName). 우선주·스팩·리츠 제외."""
+        rows, seen = [], False
         for mt, mname in MARKETS.items():
             for it in self.stock_list(mt):
+                if not seen:
+                    seen = True
+                    print('   종목목록 응답 항목:', ', '.join(sorted(it.keys())))
                 sh = None
                 for k in ("listCount", "list_count", "lst_stkcnt", "flo_stk"):
                     if it.get(k) not in (None, ""):
                         sh = to_num(it.get(k)); break
+                ind = ""
+                for k in ("upName", "up_name", "upjong", "sector", "induty_nm"):
+                    if str(it.get(k) or "").strip():
+                        ind = str(it.get(k)).strip(); break
                 rows.append({"ticker": str(it.get("code", "")).strip(), "name": str(it.get("name", "")).strip(),
-                             "market": mname, "shares": sh})
+                             "market": mname, "shares": sh, "industry": ind,
+                             "size": str(it.get("upSizeName") or "").strip()})
         df = pd.DataFrame(rows)
         df["ticker"] = df["ticker"].str.replace(r"_(NX|AL)$", "", regex=True)
         df = df[df["ticker"].str.fullmatch(r"\d{6}")]

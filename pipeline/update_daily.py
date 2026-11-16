@@ -34,6 +34,27 @@ def _check_shares(d, lst):
     return sh * np.nan
 
 
+_IND_CHANGED = False
+
+
+def _fill_industry(d, lst):
+    """키움 종목목록의 업종명(upName)을 모든 날짜 행에 채웁니다(현재 분류 기준). 목록에 없는 종목은 기존 값 유지."""
+    global _IND_CHANGED
+    ind = lst.set_index('ticker')['industry'].astype(str)
+    ok = ind[ind.str.strip() != '']
+    log(f'업종 정보: 목록 {len(lst):,}종목 중 {len(ok):,}종목에 업종명 있음')
+    if ok.empty:
+        log('주의: 키움 종목목록에서 업종명(upName)을 받지 못했습니다. 위의 "종목목록 응답 항목" 줄을 알려 주세요.')
+        return
+    cur = d['industry_name'].fillna('').astype(str)
+    new = d['ticker'].map(ok).fillna(cur)
+    ch = int((new != cur).sum())
+    if ch:
+        d['industry_name'] = new
+        _IND_CHANGED = True
+    log(f'업종 채움: 과거 포함 {ch:,}행 갱신 (업종 {new[new != ""].nunique()}개, 업종 있는 종목 {d.loc[new != "", "ticker"].nunique():,}개)')
+
+
 def main(api=None, today: str | None = None):
     if api is None:
         from kiwoom_api import Kiwoom
@@ -61,6 +82,7 @@ def main(api=None, today: str | None = None):
     lst = lst[[not is_etf(t, n, etf) for t, n in zip(lst.ticker, lst.name)]].reset_index(drop=True)
     log(f'종목 목록 {len(lst):,}개 (ETF·ETN·우선주·스팩·리츠 제외)')
     lst['shares'] = _check_shares(d, lst)
+    _fill_industry(d, lst)
 
     new_parts, replace = [], set()
     n_new = n_full = n_err = 0
@@ -92,7 +114,7 @@ def main(api=None, today: str | None = None):
             sh = r.shares
             df['market_cap_won'] = df['close'] * sh if sh and np.isfinite(sh) else np.nan
             df['market_cap_observed'] = df['market_cap_won'].notna().astype(int)
-            df['industry_name'] = ''
+            df['industry_name'] = r.industry or ''
             new_parts.append(df)
         except Exception as e:  # 한 종목 실패로 전체를 멈추지 않음
             n_err += 1
@@ -101,6 +123,9 @@ def main(api=None, today: str | None = None):
             log(f'  {i:,}/{len(lst):,} 종목 확인')
     if not new_parts:
         log('새로 받은 시세가 없습니다(휴장일이거나 이미 최신).')
+        if _IND_CHANGED:
+            save_panel(d)
+            log('업종만 갱신해 저장했습니다.')
         return 0
     new = pd.concat(new_parts, ignore_index=True)
     if replace:
