@@ -16,7 +16,7 @@ sys.path[:0] = [str(PIPE), str(PIPE / 'analysis')]
 from common import REPO, work_dir, log, opt, load_panel, last_date  # noqa: E402
 
 STEPS = ['make_eps', 'run_chain', 'run_entry', 'run_dyn', 'run_sens2', 'analyze_v3', 'analyze_v3b', 'analyze_v4',
-         'build_web2', 'build_site', 'build_dash']
+         'build_web2', 'build_site', 'build_dash', 'build_top']
 HEAD = ('<!doctype html>\n<html lang="ko">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         '<style>html,body{margin:0}</style>\n')
@@ -46,6 +46,11 @@ def publish():
     if not page.lstrip().lower().startswith('<!doctype'):
         page = HEAD + page
     (REPO / 'index.html').write_text(page, encoding='utf-8')
+    if (web / 'top.html').exists():
+        tp = (web / 'top.html').read_text(encoding='utf-8')
+        if not tp.lstrip().lower().startswith('<!doctype'):
+            tp = HEAD + tp
+        (REPO / 'top.html').write_text(tp, encoding='utf-8')
     (REPO / '.nojekyll').write_text('', encoding='utf-8')
     keeps = {n: (REPO / 'data' / n).read_bytes() for n in ('reasons.json', 'themes.json') if (REPO / 'data' / n).exists()}
     for sub in ('data', 'px'):
@@ -84,7 +89,7 @@ def push():
     for attempt in range(3):
         git('fetch', 'origin')
         git('reset', '--mixed', 'origin/main')      # 방금 만든 파일은 그대로 두고 기준만 최신으로
-        git('add', '-A', 'index.html', '.nojekyll', 'data', 'px', 'pipeline')
+        git('add', '-A', 'index.html', 'top.html', '.nojekyll', 'data', 'px', 'pipeline')
         r = git('commit', '-m', f'daily update {last_date()}')
         if 'nothing to commit' in (r.stdout + r.stderr):
             log('바뀐 내용이 없어 업로드하지 않았습니다.')
