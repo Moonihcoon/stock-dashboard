@@ -16,7 +16,7 @@ sys.path[:0] = [str(PIPE), str(PIPE / 'analysis')]
 from common import REPO, work_dir, log, opt, load_panel, last_date  # noqa: E402
 
 STEPS = ['make_eps', 'run_chain', 'run_entry', 'run_dyn', 'run_sens2', 'analyze_v3', 'analyze_v3b', 'analyze_v4',
-         'build_web2', 'build_site', 'build_dash', 'build_rank']
+         'build_web2', 'build_site', 'build_dash', 'build_top']
 HEAD = ('<!doctype html>\n<html lang="ko">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         '<style>html,body{margin:0}</style>\n')
