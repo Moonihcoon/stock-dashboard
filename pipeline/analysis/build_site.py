@@ -1,7 +1,7 @@
 """대시보드용 시세 데이터 생성 (work/web 아래).
 
 data/dates.json        거래일 목록 (인덱스 = di)
-data/tick.json         [종목코드, 종목명, 시장] (인덱스 = ti)  ※ ETF·ETN·우선주 제외
+data/tick.json         [종목코드, 종목명, 시장, 업종] (인덱스 = ti)  ※ ETF·ETN·우선주 제외
 data/top/YYYY-MM.json  {di: [[ti, 상승률%, 거래대금(억), 종가, 시가총액(억)|null], ... 상위 200]}
 px/m/YYYY-MM.txt       월별 전 종목 일봉 (gzip+base64 JSON {ti: run})
 월 단위로 나눠서, 매일 바뀌는 파일은 이번 달 것 두 개뿐입니다(저장소 용량 관리).
@@ -12,7 +12,7 @@ from common import analysis_panel
 
 W = 'web'
 d = analysis_panel()[['date', 'ticker', 'name', 'market', 'open', 'high', 'low', 'close', 'value',
-                      'market_cap_won', 'market_cap_observed']].copy()
+                      'market_cap_won', 'market_cap_observed', 'industry_name']].copy()
 dates = sorted(d.date.unique()); di = {x: i for i, x in enumerate(dates)}
 d['di'] = d.date.map(di)
 d = d.sort_values(['ticker', 'date']).reset_index(drop=True)
@@ -24,7 +24,7 @@ dump = lambda p, o: open(f'{W}/{p}', 'w', encoding='utf-8').write(json.dumps(o, 
 dump('data/dates.json', [str(pd.Timestamp(x).date()) for x in dates])
 nm = d.drop_duplicates('ticker', keep='last').set_index('ticker')
 tk = sorted(d.ticker.unique()); ti = {t: i for i, t in enumerate(tk)}
-dump('data/tick.json', [[t, nm.loc[t, 'name'], nm.loc[t, 'market']] for t in tk])
+dump('data/tick.json', [[t, nm.loc[t, 'name'], nm.loc[t, 'market'], ('' if pd.isna(nm.loc[t, 'industry_name']) else str(nm.loc[t, 'industry_name']))] for t in tk])
 d['t'] = d.ticker.map(ti)
 d['ym'] = d.date.dt.strftime('%Y-%m')
 
@@ -34,6 +34,14 @@ x['rate'] = (x.close / x.pc - 1) * 100
 x = x.sort_values(['di', 'rate'], ascending=[True, False])
 x = x.groupby('di').head(200)
 x['mc'] = np.where(x.market_cap_observed == 1, x.market_cap_won / 1e8, np.nan)
+# 타임라인 바용 요약: 날짜마다 상위 10개 평균 상승률 · 상승률 29.5% 이상 종목 수 (상위 200 기준)
+nd = len(dates)
+sp_a, sp_u = [0.0] * nd, [0] * nd
+for dd, h in x.groupby('di'):
+    sp_a[int(dd)] = round(float(h.rate.head(10).mean()), 1)
+    sp_u[int(dd)] = int((h.rate >= 29.5).sum())
+first = int(x.di.min()) if len(x) else 0
+dump('data/spark.json', {'s': first, 'a': sp_a, 'u': sp_u})
 for ym, g in x.groupby('ym'):
     o = {}
     for dd, h in g.groupby('di'):

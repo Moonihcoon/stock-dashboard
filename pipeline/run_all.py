@@ -16,7 +16,7 @@ sys.path[:0] = [str(PIPE), str(PIPE / 'analysis')]
 from common import REPO, work_dir, log, opt, load_panel, last_date  # noqa: E402
 
 STEPS = ['make_eps', 'run_chain', 'run_entry', 'run_dyn', 'run_sens2', 'analyze_v3', 'analyze_v3b', 'analyze_v4',
-         'build_web2', 'build_site', 'build_dash', 'build_top']
+         'build_web2', 'build_site', 'build_dash', 'build_rank']
 HEAD = ('<!doctype html>\n<html lang="ko">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         '<style>html,body{margin:0}</style>\n')
@@ -46,11 +46,6 @@ def publish():
     if not page.lstrip().lower().startswith('<!doctype'):
         page = HEAD + page
     (REPO / 'index.html').write_text(page, encoding='utf-8')
-    if (web / 'top.html').exists():
-        tp = (web / 'top.html').read_text(encoding='utf-8')
-        if not tp.lstrip().lower().startswith('<!doctype'):
-            tp = HEAD + tp
-        (REPO / 'top.html').write_text(tp, encoding='utf-8')
     (REPO / '.nojekyll').write_text('', encoding='utf-8')
     keeps = {n: (REPO / 'data' / n).read_bytes() for n in ('reasons.json', 'themes.json') if (REPO / 'data' / n).exists()}
     for sub in ('data', 'px'):
@@ -89,7 +84,7 @@ def push():
     for attempt in range(3):
         git('fetch', 'origin')
         git('reset', '--mixed', 'origin/main')      # 방금 만든 파일은 그대로 두고 기준만 최신으로
-        git('add', '-A', 'index.html', 'top.html', '.nojekyll', 'data', 'px', 'pipeline')
+        git('add', '-A', 'index.html', '.nojekyll', 'data', 'px', 'pipeline')
         r = git('commit', '-m', f'daily update {last_date()}')
         if 'nothing to commit' in (r.stdout + r.stderr):
             log('바뀐 내용이 없어 업로드하지 않았습니다.')
@@ -100,6 +95,63 @@ def push():
             return
         time.sleep(10)
     log('GitHub 업로드 실패: ' + (r.stderr or r.stdout)[-400:])
+
+
+def share_dir():
+    """공유용 저장소(상승률 200) 로컬 폴더. 설정 [share] dir, 없으면 저장소 옆 K23934959 폴더."""
+    d = opt('share', 'dir', '')
+    return Path(d) if d else REPO.parent / 'K23934959'
+
+
+def publish_share():
+    """'상승률 200' 페이지와 거기에 필요한 파일만 공유용 저장소에 올립니다(통계·후보종목 데이터는 올리지 않음)."""
+    sd = share_dir()
+    page = work_dir() / 'web' / 'rank.html'
+    if not page.exists():
+        log('rank.html 이 없어 공유 페이지 업로드를 건너뜁니다.')
+        return
+    if not (sd / '.git').exists():
+        # 이 PC에 공유용 저장소 복제본이 없으면 메인 저장소와 같은 계정의 K23934959 를 받아 옵니다.
+        o = git('remote', 'get-url', 'origin').stdout.strip()
+        url = opt('share', 'url', '') or (o.rsplit('/', 1)[0] + '/K23934959.git' if '/' in o else '')
+        r = subprocess.run(['git', 'clone', url, str(sd)], capture_output=True, text=True, encoding='utf-8', errors='replace') if url else None
+        if r is None or r.returncode != 0 or not (sd / '.git').exists():
+            log('공유용 저장소(K23934959)를 받지 못해 공유 페이지 업로드를 건너뜁니다. GitHub에 저장소를 만들었는지 확인하세요. ' + ((r.stderr or r.stdout)[-200:] if r else ''))
+            return
+        log('공유용 저장소를 이 PC에 받았습니다: ' + str(sd))
+    def g(*a):
+        return subprocess.run(['git', '-C', str(sd), *a], capture_output=True, text=True, encoding='utf-8', errors='replace')
+    g('fetch', 'origin')
+    g('checkout', '-B', 'main')
+    if g('rev-parse', '--verify', 'origin/main').returncode == 0:
+        g('reset', '--hard', 'origin/main')
+    tp = page.read_text(encoding='utf-8')
+    if not tp.lstrip().lower().startswith('<!doctype'):
+        tp = HEAD + tp
+    (sd / 'index.html').write_text(tp, encoding='utf-8')
+    (sd / '.nojekyll').write_text('', encoding='utf-8')
+    for sub in ('data', 'px'):
+        shutil.rmtree(sd / sub, ignore_errors=True)
+    (sd / 'data').mkdir(parents=True, exist_ok=True)
+    for n in ('dates.json', 'tick.json', 'spark.json', 'reasons.json', 'themes.json', 'updated.json'):
+        if (REPO / 'data' / n).exists():
+            shutil.copy(REPO / 'data' / n, sd / 'data' / n)
+    shutil.copytree(REPO / 'data' / 'top', sd / 'data' / 'top')
+    shutil.copytree(REPO / 'px' / 'm', sd / 'px' / 'm')
+    for attempt in range(3):
+        g('add', '-A', '.')
+        r = g('commit', '-m', f'rank200 update {last_date()}')
+        if 'nothing to commit' in (r.stdout + r.stderr):
+            log('공유 페이지: 바뀐 내용이 없어 업로드하지 않았습니다.')
+            return
+        r = g('push', 'origin', 'HEAD:main')
+        if r.returncode == 0:
+            log('공유 페이지(상승률 200) 업로드 성공')
+            return
+        g('fetch', 'origin')
+        g('reset', '--soft', 'origin/main')
+        time.sleep(10)
+    log('공유 페이지 업로드 실패: ' + (r.stderr or r.stdout)[-400:])
 
 
 def already_done():
@@ -165,6 +217,7 @@ def _main():
     step('상승 이유', reasons_dart.main)
     if '--no-push' not in args and opt('options', 'push', 'yes').lower() in ('yes', 'y', '1', 'true'):
         step('업로드', push)
+        step('공유 페이지', publish_share)
     log('===== 작업 끝 =====')
     return 0
 
