@@ -34,14 +34,13 @@ x['rate'] = (x.close / x.pc - 1) * 100
 x = x.sort_values(['di', 'rate'], ascending=[True, False])
 x = x.groupby('di').head(200)
 x['mc'] = np.where(x.market_cap_observed == 1, x.market_cap_won / 1e8, np.nan)
-# 타임라인 바용 요약: 날짜마다 상위 10개 평균 상승률 · 상승률 29.5% 이상 종목 수 (상위 200 기준)
+# 시장 지도 탭의 타임라인 바용 요약: 날짜마다 상위 10개 평균 상승률 · 상승률 29.5% 이상 종목 수 (상위 200 기준)
 nd = len(dates)
 sp_a, sp_u = [0.0] * nd, [0] * nd
 for dd, h in x.groupby('di'):
     sp_a[int(dd)] = round(float(h.rate.head(10).mean()), 1)
     sp_u[int(dd)] = int((h.rate >= 29.5).sum())
-first = int(x.di.min()) if len(x) else 0
-dump('data/spark.json', {'s': first, 'a': sp_a, 'u': sp_u})
+dump('data/spark.json', {'s': int(x.di.min()) if len(x) else 0, 'a': sp_a, 'u': sp_u})
 for ym, g in x.groupby('ym'):
     o = {}
     for dd, h in g.groupby('di'):

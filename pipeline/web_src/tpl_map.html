@@ -1,0 +1,100 @@
+<style>
+/* ===== 시장 지도 탭 (상승률 200 전용). 모두 #p-map 안에서만 적용됩니다 ===== */
+#p-map{--card:var(--panel)}
+#p-map .mp-eras{display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none}
+#p-map .mp-eras::-webkit-scrollbar{display:none}
+#p-map .mp-eras button{all:unset;box-sizing:border-box;cursor:pointer;flex:0 0 auto;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:5px 12px;font-size:12.5px;white-space:nowrap;border-left:4px solid var(--up);line-height:1.3;color:var(--ink)}
+#p-map .mp-eras button small{display:block;font-size:10.5px;color:var(--ink-2)}
+#p-map .mp-eras button[aria-current="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+#p-map .mp-eras button[aria-current="true"] small{color:inherit;opacity:.75}
+#p-map button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#p-map .mp-main{display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:980px){#p-map .mp-main{grid-template-columns:minmax(0,1.4fr) minmax(330px,.6fr);align-items:start}
+  #p-map .mp-panel{max-height:calc(100vh - 150px);overflow:auto;position:sticky;top:8px}}
+#p-map .mp-col{display:flex;flex-direction:column;gap:8px;min-width:0}
+#p-map .mp-wrap{position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--soft);height:58vh;min-height:380px}
+@media(min-width:980px){#p-map .mp-wrap{height:calc(100vh - 330px);min-height:460px}}
+#mp-tm{position:absolute;inset:0;width:100%;height:100%;display:block}
+#mp-tm .tile{cursor:pointer}#mp-tm .tile rect{stroke:var(--panel);stroke-width:1}#mp-tm .tile:hover rect{stroke:var(--ink);stroke-width:2}
+#mp-tm .tile.sel rect{stroke:var(--ink);stroke-width:3}
+#mp-tm text{pointer-events:none;font-family:inherit}
+#mp-tm .gl{fill:var(--ink-2);font-size:11px;font-weight:600}
+#p-map .mp-top{position:absolute;left:10px;top:10px;display:flex;gap:6px;z-index:2}
+#p-map .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel)}
+#p-map .seg button{all:unset;cursor:pointer;padding:5px 12px;font-size:12.5px;color:var(--ink-2)}
+#p-map .seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+#p-map .mp-hint{position:absolute;left:10px;bottom:8px;z-index:2;font-size:11.5px;color:var(--ink-2);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:2px 8px;max-width:calc(100% - 20px)}
+#mp-chartview{position:absolute;inset:0;overflow:auto;padding:52px 12px 12px;background:var(--panel)}
+#mp-chartview[hidden]{display:none}
+#mp-tip{position:absolute;z-index:3;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12px;padding:5px 9px;border-radius:6px;max-width:260px;display:none}
+#p-map .mp-tlbox{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:10px 12px}
+#p-map .mp-tlhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#p-map .mp-dt{flex:1;min-width:150px;text-align:center}
+#p-map .mp-dt b{font:600 17px 'Noto Serif KR',serif;display:block}#p-map .mp-dt small{color:var(--ink-2);font-size:12px}
+#p-map .b2{all:unset;cursor:pointer;box-sizing:border-box;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:8px;padding:6px 10px;font-size:13px;white-space:nowrap}
+#p-map .b2:hover{border-color:var(--ink-2)}#p-map .b2[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+#p-map .mp-tlhead select,#p-map .mp-tlhead input[type=date]{font:inherit;font-size:13px;padding:5px 8px}
+#mp-tl{position:relative;height:58px;margin-top:8px;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none}
+#mp-tl canvas{position:absolute;inset:0;width:100%;height:100%}
+#mp-tlyr{position:relative;height:16px;font-size:10.5px;color:var(--ink-3)}#mp-tlyr span{position:absolute;transform:translateX(-50%)}
+#p-map .mp-panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+#p-map .mp-panel h2{margin:0;font:600 21px 'Noto Serif KR',serif}#p-map .mp-panel h2 small{font:400 12px sans-serif;color:var(--ink-2);margin-left:6px}
+#p-map .mp-lead{margin:6px 0 10px;color:var(--ink-2)}
+#p-map .pchips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+#p-map .pchip{all:unset;cursor:pointer;box-sizing:border-box;border:1px solid var(--line);background:var(--bg);border-radius:14px;padding:3px 11px;font-size:12.5px;color:var(--ink)}
+#p-map .pchip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+#p-map .pchip small{color:inherit;opacity:.7;margin-left:3px}
+#p-map .mp-panel input[type=search]{width:100%;box-sizing:border-box;margin:4px 0 8px}
+#p-map .sel-card{border-left:4px solid var(--up);background:var(--soft);border-radius:6px;padding:10px 12px;margin:8px 0}
+#p-map .sel-card h3{margin:0;font-size:16px}#p-map .sel-card .kv{display:flex;flex-wrap:wrap;gap:4px 14px;margin:6px 0;font-size:12.5px;color:var(--ink-2)}#p-map .sel-card .kv b{color:var(--ink)}
+#p-map .sel-card ul{margin:6px 0 0;padding-left:18px;font-size:13px}#p-map .sel-card li{margin:3px 0}
+#p-map ol.mlst{list-style:none;margin:6px 0 0;padding:0}
+#p-map ol.mlst li{border-top:1px solid var(--line)}
+#p-map ol.mlst button{all:unset;cursor:pointer;display:grid;grid-template-columns:26px 1fr auto;gap:2px 8px;width:100%;box-sizing:border-box;padding:7px 4px}
+#p-map ol.mlst button:hover,#p-map ol.mlst li.sel button{background:var(--soft)}
+#p-map ol.mlst .rk{color:var(--ink-3);font-size:12px;text-align:right;grid-row:span 2}
+#p-map ol.mlst .nm{font-weight:600}
+#p-map ol.mlst .rt{color:var(--up);font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+#p-map ol.mlst .rs{grid-column:2/4;font-size:12px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#p-map ol.mlst mark{background:#ffe27a;color:#222;border-radius:2px}
+#p-map .mp-memo{width:100%;box-sizing:border-box;min-height:90px;margin-top:8px;font:inherit;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+#p-map .mp-memo[hidden]{display:none}
+#p-map .mp-empty{padding:30px 10px;text-align:center;color:var(--ink-2)}
+</style>
+<section id="p-map" hidden>
+<div class="mp-eras" id="mp-eras" aria-label="연도 바로가기"></div>
+<div class="mp-main">
+<div class="mp-col">
+<div class="mp-wrap" id="mp-wrap">
+<div class="mp-top"><div class="seg" role="group" aria-label="화면 선택"><button type="button" id="mp-vmap" aria-pressed="true">시장 지도</button><button type="button" id="mp-vchart" aria-pressed="false">일봉 차트</button></div></div>
+<svg id="mp-tm" role="img" aria-label="업종별 시장 지도"></svg>
+<div id="mp-chartview" hidden><h3 id="mp-ct" style="margin:0 0 8px;font-size:15px"></h3><div id="mp-cb"></div></div>
+<div class="mp-hint" id="mp-hint"></div><div id="mp-tip"></div>
+</div>
+<div class="mp-tlbox">
+<div class="mp-tlhead">
+<button type="button" class="b2" id="mp-prevs" title="이전 급등일(상위 10개 평균 상승률이 높은 날)">⏮ 급등일</button>
+<button type="button" class="b2" id="mp-prev">‹ 1일</button>
+<div class="mp-dt"><b id="mp-dtt"></b><small id="mp-dts"></small></div>
+<button type="button" class="b2" id="mp-next">1일 ›</button>
+<button type="button" class="b2" id="mp-nexts" title="다음 급등일">급등일 ⏭</button>
+<input type="date" id="mp-pick" aria-label="날짜 선택">
+<button type="button" class="b2" id="mp-play" aria-pressed="false" aria-label="자동 재생">▶</button>
+<select id="mp-spd" aria-label="재생 속도"><option value="1200">느리게</option><option value="600" selected>보통</option><option value="250">빠르게</option></select>
+</div>
+<div id="mp-tl"><canvas id="mp-tlc"></canvas></div><div id="mp-tlyr"></div>
+</div>
+</div>
+<aside class="mp-panel">
+<h2 id="mp-pt"></h2>
+<p class="mp-lead" id="mp-lead"></p>
+<div class="pchips" id="mp-mk"></div>
+<div class="pchips" id="mp-th"></div>
+<input type="search" id="mp-q" placeholder="종목명·상승 이유·테마 검색" aria-label="검색">
+<div id="mp-sel"></div>
+<div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0"><button type="button" class="b2" id="mp-memob">📝 내 메모</button><button type="button" class="b2" id="mp-xl">엑셀 다운로드</button></div>
+<textarea class="mp-memo" id="mp-memo" hidden placeholder="이 날짜에 대한 메모 (이 브라우저에만 저장됩니다)"></textarea>
+<ol class="mlst" id="mp-list"></ol>
+</aside>
+</div>
+</section>
