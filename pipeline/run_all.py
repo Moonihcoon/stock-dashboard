@@ -64,6 +64,25 @@ def git(*a):
     return subprocess.run(['git', '-C', str(REPO), *a], capture_output=True, text=True, encoding='utf-8', errors='replace')
 
 
+def migrate_remote():
+    """GitHub 저장소를 my-bank 로 옮긴 뒤, 아직 옛 저장소를 쓰고 있는 PC를 자동으로 my-bank 로 바꿉니다.
+    my-bank 에 대시보드 파일(pipeline/run_all.py)이 올라와 있을 때만 바꿉니다(안 올라와 있으면 옛 저장소 유지)."""
+    if not (REPO / '.git').exists():
+        return
+    o = git('remote', 'get-url', 'origin').stdout.strip()
+    if not o or 'my-bank' in o.lower() or '/' not in o:
+        return
+    new = o.rsplit('/', 1)[0] + '/my-bank.git'
+    r = git('fetch', new, 'main')
+    if r.returncode != 0:
+        return
+    if git('cat-file', '-e', 'FETCH_HEAD:pipeline/run_all.py').returncode != 0:
+        log('my-bank 에 아직 대시보드 파일이 없어 옛 저장소를 계속 씁니다.')
+        return
+    r = git('remote', 'set-url', 'origin', new)
+    log('GitHub 저장소를 my-bank 로 바꿨습니다.' if r.returncode == 0 else '저장소 주소 변경 실패: ' + (r.stderr or r.stdout)[-200:])
+
+
 def pull():
     """GitHub의 최신 상태(다른 PC가 올린 결과, GitHub 웹에서 고친 코드)로 맞춥니다.
     이 PC의 웹 파일은 매번 새로 만들기 때문에 로컬 변경은 버려도 됩니다."""
@@ -195,6 +214,7 @@ def _main():
     args = set(sys.argv[1:])
     log('===== 작업 시작 =====')
     if '--no-push' not in args:
+        step('저장소 이전 확인', migrate_remote)
         step('코드 받기', pull)
     if '--auto' in args and already_done():
         log('오늘 업데이트는 이미 GitHub에 올라가 있어 건너뜁니다(다른 PC가 먼저 실행).')
